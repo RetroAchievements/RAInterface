@@ -5,6 +5,7 @@ set TARGET_DIR=%1
 rem === see if anything needs to be copied ===
 xcopy /l /i /d /y "%SOURCE_DIR%\overlay" "%TARGET_DIR%\overlay\" > Temp.txt
 set /p FILES=<Temp.txt
+del Temp.txt
 
 rem === if result was anything other than "0 Files(s)", do the copy ===
 if not "%FILES%"=="0 File(s)" (

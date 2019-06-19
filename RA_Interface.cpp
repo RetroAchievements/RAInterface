@@ -1,63 +1,8 @@
 #include "RA_Interface.h"
 
-// Exposed, shared
-// App-level:
-bool (CCONV *_RA_GameIsActive) (void) = nullptr;
-void (CCONV *_RA_CauseUnpause) (void) = nullptr;
-void (CCONV *_RA_CausePause) (void) = nullptr;
-void (CCONV *_RA_RebuildMenu) (void) = nullptr;
-void (CCONV *_RA_ResetEmulation) (void) = nullptr;
-void (CCONV *_RA_GetEstimatedGameTitle) (char* sNameOut) = nullptr;
-void (CCONV *_RA_LoadROM) (const char* sNameOut) = nullptr;
-
-bool RA_GameIsActive()
-{
-    if (_RA_GameIsActive != nullptr)
-        return _RA_GameIsActive();
-    return false;
-}
-
-void RA_CauseUnpause()
-{
-    if (_RA_CauseUnpause != nullptr)
-        _RA_CauseUnpause();
-}
-
-void RA_CausePause()
-{
-    if (_RA_CausePause != nullptr)
-        _RA_CausePause();
-}
-
-void RA_RebuildMenu()
-{
-    if (_RA_RebuildMenu != nullptr)
-        _RA_RebuildMenu();
-}
-
-void RA_ResetEmulation()
-{
-    if (_RA_ResetEmulation != nullptr)
-        _RA_ResetEmulation();
-}
-
-void RA_LoadROM(const char* sFullPath)
-{
-    if (_RA_LoadROM != nullptr)
-        _RA_LoadROM(sFullPath);
-}
-
-void RA_GetEstimatedGameTitle(char* sNameOut)
-{
-    if (_RA_GetEstimatedGameTitle != nullptr)
-        _RA_GetEstimatedGameTitle(sNameOut);
-}
-
-
-#ifndef RA_EXPORTS
-
 #include <winhttp.h>
 #include <cassert>
+#include <stdexcept>
 #include <string>
 
 //Note: this is ALL public facing! :S tbd tidy up this bit
@@ -69,6 +14,7 @@ const char* (CCONV *_RA_IntegrationVersion)() = nullptr;
 const char* (CCONV *_RA_HostName)() = nullptr;
 int		(CCONV *_RA_InitI)(HWND hMainWnd, int nConsoleID, const char* sClientVer) = nullptr;
 int		(CCONV *_RA_InitOffline)(HWND hMainWnd, int nConsoleID, const char* sClientVer) = nullptr;
+void    (CCONV *_RA_UpdateHWnd)(HWND hMainHWND);
 int		(CCONV *_RA_Shutdown)() = nullptr;
 //	Load/Save
 bool    (CCONV *_RA_ConfirmLoadNewRom)(bool bQuitting) = nullptr;
@@ -88,17 +34,15 @@ void    (CCONV *_RA_AttemptLogin)(bool bBlocking) = nullptr;
 void    (CCONV *_RA_SetPaused)(bool bIsPaused) = nullptr;
 HMENU   (CCONV *_RA_CreatePopupMenu)() = nullptr;
 void    (CCONV *_RA_UpdateAppTitle)(const char* pMessage) = nullptr;
-void    (CCONV *_RA_HandleHTTPResults)(void) = nullptr;
 void    (CCONV *_RA_InvokeDialog)(LPARAM nID) = nullptr;
 void    (CCONV *_RA_InstallSharedFunctions)(bool(*)(), void(*)(), void(*)(), void(*)(), void(*)(char*), void(*)(), void(*)(const char*)) = nullptr;
 int     (CCONV *_RA_SetConsoleID)(unsigned int nConsoleID) = nullptr;
 int     (CCONV *_RA_HardcoreModeIsActive)(void) = nullptr;
 bool    (CCONV *_RA_WarnDisableHardcore)(const char* sActivity) = nullptr;
 //  Overlay:
+void    (CCONV *_RA_NavigateOverlay)(ControllerInput* pInput) = nullptr;
 int     (CCONV *_RA_UpdateOverlay)(ControllerInput* pInput, float fDeltaTime, bool Full_Screen, bool Paused) = nullptr;
-int     (CCONV *_RA_UpdatePopups)(ControllerInput* pInput, float fDeltaTime, bool Full_Screen, bool Paused) = nullptr;
 void    (CCONV *_RA_RenderOverlay)(HDC hDC, RECT* prcSize) = nullptr;
-void    (CCONV *_RA_RenderPopups)(HDC hDC, RECT* prcSize) = nullptr;
 bool    (CCONV *_RA_IsOverlayFullyVisible) () = nullptr;
 
 
@@ -111,15 +55,14 @@ void RA_AttemptLogin(bool bBlocking)
         _RA_AttemptLogin(bBlocking);
 }
 
+void RA_NavigateOverlay(ControllerInput* pInput)
+{
+    if (_RA_NavigateOverlay != nullptr)
+        _RA_NavigateOverlay(pInput);
+}
+
 void RA_UpdateRenderOverlay(HDC hDC, ControllerInput* pInput, float fDeltaTime, RECT* prcSize, bool Full_Screen, bool Paused)
 {
-    if (_RA_UpdatePopups != nullptr)
-        _RA_UpdatePopups(pInput, fDeltaTime, Full_Screen, Paused);
-
-    if (_RA_RenderPopups != nullptr)
-        _RA_RenderPopups(hDC, prcSize);
-
-    //	NB. Render overlay second, on top of popups!
     if (_RA_UpdateOverlay != nullptr)
         _RA_UpdateOverlay(pInput, fDeltaTime, Full_Screen, Paused);
 
@@ -133,6 +76,12 @@ bool RA_IsOverlayFullyVisible()
         return _RA_IsOverlayFullyVisible();
 
     return false;
+}
+
+void RA_UpdateHWnd(HWND hMainWnd)
+{
+    if (_RA_UpdateHWnd != nullptr)
+        _RA_UpdateHWnd(hMainWnd);
 }
 
 unsigned int RA_IdentifyRom(BYTE* pROMData, unsigned int nROMSize)
@@ -180,8 +129,6 @@ void RA_UpdateAppTitle(const char* sCustomMsg)
 
 void RA_HandleHTTPResults()
 {
-    if (_RA_HandleHTTPResults != nullptr)
-        _RA_HandleHTTPResults();
 }
 
 bool RA_ConfirmLoadNewRom(bool bIsQuitting)
@@ -368,6 +315,40 @@ static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage,
     return bSuccess;
 }
 
+static BOOL DoBlockingHttpGetWithRetry(const char* sHostName, const char* sRequestedPage, char* pBufferOut, unsigned int nBufferOutSize, DWORD* pBytesRead, DWORD* pStatusCode)
+{
+    int nRetries = 4;
+    do
+    {
+        if (DoBlockingHttpGet(sHostName, sRequestedPage, pBufferOut, nBufferOutSize, pBytesRead, pStatusCode) != FALSE)
+            return TRUE;
+
+        switch (*pStatusCode)
+        {
+            case 12002: // timeout
+            case 12007: // dns lookup failed
+            case 12017: // handle closed before request completed
+            case 12019: // handle not initialized
+            case 12028: // data not available at this time
+            case 12029: // handshake failed
+            case 12030: // connection aborted
+            case 12031: // connection reset
+            case 12032: // explicit request to retry
+            case 12152: // response could not be parsed, corrupt?
+            case 12163: // lost connection during request
+                --nRetries;
+                break;
+
+            default:
+                return FALSE;
+        }
+
+    } while (nRetries);
+
+    return FALSE;
+}
+
+#ifndef RA_UTEST
 static std::wstring GetIntegrationPath()
 {
     wchar_t sBuffer[2048];
@@ -378,6 +359,7 @@ static std::wstring GetIntegrationPath()
 
     return std::wstring(sBuffer);
 }
+#endif
 
 static void WriteBufferToFile(const std::wstring& sFile, const char* sBuffer, int nBytes)
 {
@@ -409,7 +391,7 @@ static void FetchIntegrationFromWeb(const char* sHostName, DWORD* pStatusCode)
     else
     {
         DWORD nBytesRead = 0;
-        if (DoBlockingHttpGet(sHostName, "bin/RA_Integration.dll", buffer, MAX_SIZE, &nBytesRead, pStatusCode))
+        if (DoBlockingHttpGetWithRetry(sHostName, "bin/RA_Integration.dll", buffer, MAX_SIZE, &nBytesRead, pStatusCode))
             WriteBufferToFile(GetIntegrationPath(), buffer, nBytesRead);
 
         delete[](buffer);
@@ -463,20 +445,19 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_HostName = (const char*(CCONV *)())                                           GetProcAddress(g_hRADLL, "_RA_HostName");
     _RA_InitI = (int(CCONV *)(HWND, int, const char*))                                GetProcAddress(g_hRADLL, "_RA_InitI");
     _RA_InitOffline = (int(CCONV *)(HWND, int, const char*))                          GetProcAddress(g_hRADLL, "_RA_InitOffline");
+    _RA_UpdateHWnd = (void(CCONV *)(HWND))                                            GetProcAddress(g_hRADLL, "_RA_UpdateHWnd");
     _RA_Shutdown = (int(CCONV *)())                                                   GetProcAddress(g_hRADLL, "_RA_Shutdown");
     _RA_AttemptLogin = (void(CCONV *)(bool))                                          GetProcAddress(g_hRADLL, "_RA_AttemptLogin");
+    _RA_NavigateOverlay = (void(CCONV *)(ControllerInput*))                           GetProcAddress(g_hRADLL, "_RA_NavigateOverlay");
     _RA_UpdateOverlay = (int(CCONV *)(ControllerInput*, float, bool, bool))           GetProcAddress(g_hRADLL, "_RA_UpdateOverlay");
-    _RA_UpdatePopups = (int(CCONV *)(ControllerInput*, float, bool, bool))            GetProcAddress(g_hRADLL, "_RA_UpdatePopups");
     _RA_RenderOverlay = (void(CCONV *)(HDC, RECT*))                                   GetProcAddress(g_hRADLL, "_RA_RenderOverlay");
     _RA_IsOverlayFullyVisible = (bool(CCONV *)())                                     GetProcAddress(g_hRADLL, "_RA_IsOverlayFullyVisible");
-    _RA_RenderPopups = (void(CCONV *)(HDC, RECT*))                                    GetProcAddress(g_hRADLL, "_RA_RenderPopups");
     _RA_OnLoadNewRom = (int(CCONV *)(const BYTE*, unsigned int))                      GetProcAddress(g_hRADLL, "_RA_OnLoadNewRom");
     _RA_IdentifyRom = (unsigned int(CCONV *)(const BYTE*, unsigned int))              GetProcAddress(g_hRADLL, "_RA_IdentifyRom");
     _RA_ActivateGame = (void(CCONV *)(unsigned int))                                  GetProcAddress(g_hRADLL, "_RA_ActivateGame");
     _RA_InstallMemoryBank = (void(CCONV *)(int, void*, void*, int))                   GetProcAddress(g_hRADLL, "_RA_InstallMemoryBank");
     _RA_ClearMemoryBanks = (void(CCONV *)())                                          GetProcAddress(g_hRADLL, "_RA_ClearMemoryBanks");
     _RA_UpdateAppTitle = (void(CCONV *)(const char*))                                 GetProcAddress(g_hRADLL, "_RA_UpdateAppTitle");
-    _RA_HandleHTTPResults = (void(CCONV *)())                                         GetProcAddress(g_hRADLL, "_RA_HandleHTTPResults");
     _RA_ConfirmLoadNewRom = (bool(CCONV *)(bool))                                     GetProcAddress(g_hRADLL, "_RA_ConfirmLoadNewRom");
     _RA_CreatePopupMenu = (HMENU(CCONV *)(void))                                      GetProcAddress(g_hRADLL, "_RA_CreatePopupMenu");
     _RA_InvokeDialog = (void(CCONV *)(LPARAM))                                        GetProcAddress(g_hRADLL, "_RA_InvokeDialog");
@@ -523,13 +504,13 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
 {
     const char* sVerInstalled = _RA_InstallIntegration();
 
-    const char* sHostName = nullptr;
+    char sHostName[256] = "";
     if (_RA_HostName != nullptr)
-        sHostName = _RA_HostName();
+        strcpy_s(sHostName, sizeof(sHostName), _RA_HostName());
 
-    if (sHostName == nullptr)
+    if (!sHostName[0])
     {
-        sHostName = "www.retroachievements.org";
+        strcpy_s(sHostName, sizeof(sHostName), "www.retroachievements.org");
     }
     else if (_RA_InitOffline != nullptr && strcmp(sHostName, "OFFLINE") == 0)
     {
@@ -541,19 +522,19 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
     DWORD nStatusCode = 0;
     char buffer[1024];
     ZeroMemory(buffer, 1024);
-    if (DoBlockingHttpGet(sHostName, "LatestIntegration.html", buffer, 1024, &nBytesRead, &nStatusCode) == FALSE)
+    if (DoBlockingHttpGetWithRetry(sHostName, "LatestIntegration.html", buffer, 1024, &nBytesRead, &nStatusCode) == FALSE)
     {
         if (_RA_InitOffline != nullptr)
         {
             sprintf_s(buffer, sizeof(buffer) / sizeof(buffer[0]), "Cannot access %s (status code %u)\nWorking offline.", sHostName, nStatusCode);
-            MessageBoxA(nullptr, buffer, "Warning", MB_OK | MB_ICONWARNING);
+            MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
 
             _RA_InitOffline(hMainHWND, nConsoleID, sClientVersion);
         }
         else
         {
             sprintf_s(buffer, sizeof(buffer) / sizeof(buffer[0]), "Cannot access %s (status code %u)\nPlease try again later.", sHostName, nStatusCode);
-            MessageBoxA(nullptr, buffer, "Warning", MB_OK | MB_ICONWARNING);
+            MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
 
             RA_Shutdown();
         }
@@ -582,7 +563,7 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
             buffer,
             "Automatically update your RetroAchievements Toolset file?");
 
-        int nMBReply = MessageBoxA(nullptr, sErrorMsg, "Warning", MB_YESNO | MB_ICONWARNING);
+        int nMBReply = MessageBoxA(hMainHWND, sErrorMsg, "Warning", MB_YESNO | MB_ICONWARNING);
         if (nMBReply == IDYES)
         {
             FetchIntegrationFromWeb(sHostName, &nStatusCode);
@@ -596,7 +577,7 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
             if (nVerInstalled < nLatestDLLVer)
             {
                 sprintf_s(buffer, sizeof(buffer) / sizeof(buffer[0]), "Failed to update Toolset (status code %u).", nStatusCode);
-                MessageBoxA(nullptr, buffer, "Error", MB_OK | MB_ICONERROR);
+                MessageBoxA(hMainHWND, buffer, "Error", MB_OK | MB_ICONERROR);
             }
         }
     }
@@ -606,7 +587,7 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
         RA_Shutdown();
 
         sprintf_s(buffer, sizeof(buffer) / sizeof(buffer[0]), "The latest Toolset is required to earn achievements.");
-        MessageBoxA(nullptr, buffer, "Warning", MB_OK | MB_ICONWARNING);
+        MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
     }
     else
     {
@@ -615,42 +596,42 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
     }
 }
 
-void RA_InstallSharedFunctions(bool(*fpIsActive)(void), void(*fpCauseUnpause)(void), void(*fpCausePause)(void), void(*fpRebuildMenu)(void), void(*fpEstimateTitle)(char*), void(*fpResetEmulation)(void), void(*fpLoadROM)(const char*))
+void RA_InstallSharedFunctions(bool(*)(void), void(*fpCauseUnpause)(void), void(*fpCausePause)(void), void(*fpRebuildMenu)(void), void(*fpEstimateTitle)(char*), void(*fpResetEmulation)(void), void(*fpLoadROM)(const char*))
 {
-    _RA_GameIsActive = fpIsActive;
-    _RA_CauseUnpause = fpCauseUnpause;
-    _RA_CausePause = fpCausePause;
-    _RA_RebuildMenu = fpRebuildMenu;
-    _RA_GetEstimatedGameTitle = fpEstimateTitle;
-    _RA_ResetEmulation = fpResetEmulation;
-    _RA_LoadROM = fpLoadROM;
-
-    //	Also install *within* DLL! FFS
     if (_RA_InstallSharedFunctions != nullptr)
-        _RA_InstallSharedFunctions(fpIsActive, fpCauseUnpause, fpCausePause, fpRebuildMenu, fpEstimateTitle, fpResetEmulation, fpLoadROM);
+        _RA_InstallSharedFunctions(nullptr, fpCauseUnpause, fpCausePause, fpRebuildMenu, fpEstimateTitle, fpResetEmulation, fpLoadROM);
 }
 
 void RA_Shutdown()
 {
     //	Call shutdown on toolchain
     if (_RA_Shutdown != nullptr)
-        _RA_Shutdown();
+    {
+        try {
+            _RA_Shutdown();
+        }
+        catch (std::runtime_error&) {
+        }
+    }
 
     //	Clear func ptrs
     _RA_IntegrationVersion = nullptr;
+    _RA_HostName = nullptr;
     _RA_InitI = nullptr;
+    _RA_InitOffline = nullptr;
+    _RA_UpdateHWnd = nullptr;
     _RA_Shutdown = nullptr;
+    _RA_AttemptLogin = nullptr;
+    _RA_NavigateOverlay = nullptr;
     _RA_UpdateOverlay = nullptr;
-    _RA_UpdatePopups = nullptr;
     _RA_RenderOverlay = nullptr;
-    _RA_RenderPopups = nullptr;
+    _RA_IsOverlayFullyVisible = nullptr;
     _RA_OnLoadNewRom = nullptr;
     _RA_IdentifyRom = nullptr;
     _RA_ActivateGame = nullptr;
     _RA_InstallMemoryBank = nullptr;
     _RA_ClearMemoryBanks = nullptr;
     _RA_UpdateAppTitle = nullptr;
-    _RA_HandleHTTPResults = nullptr;
     _RA_ConfirmLoadNewRom = nullptr;
     _RA_CreatePopupMenu = nullptr;
     _RA_InvokeDialog = nullptr;
@@ -659,19 +640,10 @@ void RA_Shutdown()
     _RA_OnSaveState = nullptr;
     _RA_OnReset = nullptr;
     _RA_DoAchievementsFrame = nullptr;
-    _RA_InstallSharedFunctions = nullptr;
-
-    _RA_GameIsActive = nullptr;
-    _RA_CauseUnpause = nullptr;
-    _RA_CausePause = nullptr;
-    _RA_RebuildMenu = nullptr;
-    _RA_GetEstimatedGameTitle = nullptr;
-    _RA_ResetEmulation = nullptr;
-    _RA_LoadROM = nullptr;
     _RA_SetConsoleID = nullptr;
     _RA_HardcoreModeIsActive = nullptr;
     _RA_WarnDisableHardcore = nullptr;
-    _RA_AttemptLogin = nullptr;
+    _RA_InstallSharedFunctions = nullptr;
 
     //	Uninstall DLL
     if (g_hRADLL)
@@ -680,5 +652,3 @@ void RA_Shutdown()
         g_hRADLL = nullptr;
     }
 }
-
-#endif //RA_EXPORTS

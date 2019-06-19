@@ -3,7 +3,7 @@
 #pragma once
 
 //	NB. Shared between RA_Integration and emulator
-using BOOL = int;
+typedef int BOOL;
 
 #ifndef CCONV
 #define CCONV __cdecl
@@ -99,29 +99,6 @@ enum ConsoleID
     NumConsoleIDs
 };
 
-extern bool (*_RA_GameIsActive)();
-extern void (*_RA_CauseUnpause)();
-extern void (*_RA_CausePause)();
-extern void (*_RA_RebuildMenu)();
-extern void (*_RA_GetEstimatedGameTitle)(char* sNameOut);
-extern void (*_RA_ResetEmulation)();
-extern void (*_RA_LoadROM)(const char* sFullPath);
-
-// Shared funcs, should be implemented by emulator.
-#ifdef __cplusplus
-extern "C" {
-#endif // __cplusplus
-extern bool RA_GameIsActive();
-extern void RA_CauseUnpause();
-extern void RA_CausePause();
-extern void RA_RebuildMenu();
-extern void RA_GetEstimatedGameTitle(char* sNameOut);
-extern void RA_ResetEmulation();
-extern void RA_LoadROM(const char* sFullPath);
-#ifdef __cplusplus
-}
-#endif // __cplusplus
-
 #ifndef RA_EXPORTS
 
 #include <wtypes.h>
@@ -140,8 +117,11 @@ extern void RA_LoadROM(const char* sFullPath);
 //	Populates all function pointers so they can be used by the app.
 extern void RA_Init(HWND hMainHWND, /*enum ConsoleType*/ int console, const char* sClientVersion);
 
+//  Updates the handle for the emulator window.
+extern void RA_UpdateHWnd(HWND hMainHWND);
+
 //	Call with shared function pointers from app.
-extern void RA_InstallSharedFunctions(bool (*fpIsActive)(void), void (*fpCauseUnpause)(void),
+extern void RA_InstallSharedFunctions(bool (*fpUnusedIsActive)(void), void (*fpCauseUnpause)(void),
                                       void (*fpCausePause)(void), void (*fpRebuildMenu)(void),
                                       void (*fpEstimateTitle)(char*), void (*fpResetEmulator)(void),
                                       void (*fpLoadROM)(const char*));
@@ -153,8 +133,9 @@ extern void RA_Shutdown();
 extern void RA_DoAchievementsFrame();
 
 //	Updates and renders all on-screen overlays.
-extern void RA_UpdateRenderOverlay(HDC hDC, ControllerInput* pInput, float fDeltaTime, RECT* prcSize, bool Full_Screen,
+extern void RA_UpdateRenderOverlay(HDC hDC, struct ControllerInput* pInput, float fDeltaTime, RECT* prcSize, bool Full_Screen,
                                    bool Paused);
+extern void RA_NavigateOverlay(struct ControllerInput* pInput);
 
 //  Determines if the overlay is completely covering the screen.
 extern bool RA_IsOverlayFullyVisible();
