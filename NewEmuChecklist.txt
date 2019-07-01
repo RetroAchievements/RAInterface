@@ -23,6 +23,7 @@ RetroAchievements Emulator Requirements:
   [ ] Full-window overlay can be navigated (RA_NavigateOverlay)
   [ ] Full-window overlay navigation uses player's custom controller bindings, not hard-coded inputs.
   [ ] Closing the full-window overlay unpauses the emulator (RA_InstallSharedFunctions>RA_CauseUnpause)
+  [ ] Overlay is still functional when toggling full-screen mode (RA_UpdateHWnd)
   [ ] Resetting the emulator disables any active popups/leaderboards (RA_OnReset)
   [ ] Performance of emulator (without any debugging windows open) should not be noticeably different than the source emulator at 100% speed
   [ ] Emulator must perform at intended framerate on a PC that could have been purchased at a retail store within the last four years.

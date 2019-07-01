@@ -47,7 +47,7 @@ set VERSION_REVISION=0
 set BRANCH_INFO=%ACTIVE_BRANCH%
 
 rem === Build the product version. If on a branch, include the branch name ===
-set VERSION_PRODUCT=%VERSION_MAJOR%.%VERSION_MINOR%
+set VERSION_PRODUCT=%VERSION_TAG%
 if not "%ACTIVE_BRANCH%"=="master" (
     set VERSION_PRODUCT=%VERSION_PRODUCT%-%ACTIVE_BRANCH%
 )
@@ -64,7 +64,7 @@ rem === Generate a new version file ===
 @echo Branch: %BRANCH_INFO% (%VERSION_TAG%)
 
 echo #define %DEFINE_PREFIX%_VERSION "%VERSION_MAJOR%.%VERSION_MINOR%.%VERSION_PATCH%.%VERSION_REVISION%" > Temp.txt
-echo #define %DEFINE_PREFIX%_VERSION_SHORT "%VERSION_MAJOR%.%VERSION_MINOR%" >> Temp.txt
+echo #define %DEFINE_PREFIX%_VERSION_SHORT "%VERSION_TAG%" >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_MAJOR %VERSION_MAJOR% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_MINOR %VERSION_MINOR% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_PATCH %VERSION_PATCH% >> Temp.txt
