@@ -71,7 +71,8 @@ echo #define %DEFINE_PREFIX%_VERSION_PATCH %VERSION_PATCH% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_REVISION %VERSION_REVISION% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_PRODUCT "%VERSION_PRODUCT%" >> Temp.txt
 
-rem === Update the existing file only if the new file differs ===
+rem === Update the existing file only if the new file differs (fc requires backslashes) ===
+set TARGET_FILE=%TARGET_FILE:/=\%
 if not exist "%TARGET_FILE%" (
     rem === File doesn't exist ===
     move Temp.txt "%TARGET_FILE%" > nul
@@ -86,4 +87,3 @@ if not exist "%TARGET_FILE%" (
         del Temp.txt
     )
 )
-
