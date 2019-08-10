@@ -224,7 +224,11 @@ static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage,
     }
     else
     {
+#if defined(_MSC_VER) && _MSC_VER >= 1400
         mbstowcs_s(&nTemp, wBuffer, sizeof(wBuffer) / sizeof(wBuffer[0]), sHostName, strlen(sHostName) + 1);
+#else
+        nTemp = mbstowcs(wBuffer, sHostName, strlen(sHostName) + 1);
+#endif
         hConnect = WinHttpConnect(hSession, wBuffer, INTERNET_DEFAULT_HTTP_PORT, 0);
 
         // Create an HTTP Request handle.
@@ -234,7 +238,11 @@ static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage,
         }
         else
         {
-            mbstowcs_s(&nTemp, wBuffer, sizeof(wBuffer)/sizeof(wBuffer[0]), sRequestedPage, strlen(sRequestedPage) + 1);
+#if defined(_MSC_VER) && _MSC_VER >= 1400
+            mbstowcs_s(&nTemp, wBuffer, sizeof(wBuffer) / sizeof(wBuffer[0]), sRequestedPage, strlen(sRequestedPage) + 1);
+#else
+            nTemp = mbstowcs(wBuffer, sRequestedPage, strlen(sRequestedPage) + 1);
+#endif
 
             hRequest = WinHttpOpenRequest(hConnect,
                 L"GET",
@@ -355,7 +363,12 @@ static std::wstring GetIntegrationPath()
     DWORD iIndex = GetModuleFileNameW(0, sBuffer, 2048);
     while (iIndex > 0 && sBuffer[iIndex - 1] != '\\' && sBuffer[iIndex - 1] != '/')
         --iIndex;
+
+#if defined(_MSC_VER) && _MSC_VER >= 1400
     wcscpy_s(&sBuffer[iIndex], sizeof(sBuffer)/sizeof(sBuffer[0]) - iIndex, L"RA_Integration.dll");
+#else
+    wcscpy(&sBuffer[iIndex], L"RA_Integration.dll");
+#endif
 
     return std::wstring(sBuffer);
 }
@@ -363,8 +376,13 @@ static std::wstring GetIntegrationPath()
 
 static void WriteBufferToFile(const std::wstring& sFile, const char* sBuffer, int nBytes)
 {
+#if defined(_MSC_VER) && _MSC_VER >= 1400
     FILE* pf;
     errno_t nErr = _wfopen_s(&pf, sFile.c_str(), L"wb");
+#else
+    FILE* pf = _wfopen(sFile.c_str(), L"wb");
+#endif
+
     if (pf != nullptr)
     {
         fwrite(sBuffer, 1, nBytes, pf);
@@ -372,10 +390,15 @@ static void WriteBufferToFile(const std::wstring& sFile, const char* sBuffer, in
     }
     else
     {
+#if defined(_MSC_VER) && _MSC_VER >= 1400
         wchar_t sErrBuffer[2048];
         _wcserror_s(sErrBuffer, sizeof(sErrBuffer)/sizeof(sErrBuffer[0]), nErr);
 
         std::wstring sErrMsg = L"Unable to write " + sFile + L"\n" + sErrBuffer;
+#else
+        std::wstring sErrMsg = L"Unable to write " + sFile + L"\n" + _wcserror(errno);
+#endif
+
         MessageBoxW(nullptr, sErrMsg.c_str(), L"Error", MB_OK | MB_ICONERROR);
     }
 }
@@ -506,11 +529,21 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
 
     char sHostName[256] = "";
     if (_RA_HostName != nullptr)
+    {
+#if defined(_MSC_VER) && _MSC_VER >= 1400
         strcpy_s(sHostName, sizeof(sHostName), _RA_HostName());
+#else
+        strcpy(sHostName, _RA_HostName());
+#endif
+    }
 
     if (!sHostName[0])
     {
+#if defined(_MSC_VER) && _MSC_VER >= 1400
         strcpy_s(sHostName, sizeof(sHostName), "www.retroachievements.org");
+#else
+        strcpy(sHostName, "www.retroachievements.org");
+#endif
     }
     else if (_RA_InitOffline != nullptr && strcmp(sHostName, "OFFLINE") == 0)
     {
