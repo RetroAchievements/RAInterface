@@ -115,7 +115,7 @@ enum ConsoleID
 
 //	Captures the RA_DLL and installs/allocs all required information.
 //	Populates all function pointers so they can be used by the app.
-extern void RA_Init(HWND hMainHWND, /*enum ConsoleType*/ int console, const char* sClientVersion);
+extern void RA_Init(HWND hMainHWND, /*enum EmulatorID*/ int emulator, const char* sClientVersion);
 
 //  Updates the handle for the emulator window.
 extern void RA_UpdateHWnd(HWND hMainHWND);
