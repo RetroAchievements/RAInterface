@@ -117,6 +117,9 @@ enum ConsoleID
 //	Populates all function pointers so they can be used by the app.
 extern void RA_Init(HWND hMainHWND, /*enum EmulatorID*/ int emulator, const char* sClientVersion);
 
+//  Specifies additional information to include in the UserAgent string.
+extern void RA_SetUserAgentDetail(const char* sDetail);
+
 //  Updates the handle for the emulator window.
 extern void RA_UpdateHWnd(HWND hMainHWND);
 

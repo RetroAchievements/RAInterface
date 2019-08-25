@@ -15,6 +15,7 @@ const char* (CCONV *_RA_HostName)() = nullptr;
 int		(CCONV *_RA_InitI)(HWND hMainWnd, int nConsoleID, const char* sClientVer) = nullptr;
 int		(CCONV *_RA_InitOffline)(HWND hMainWnd, int nConsoleID, const char* sClientVer) = nullptr;
 void    (CCONV *_RA_UpdateHWnd)(HWND hMainHWND);
+void    (CCONV* _RA_SetUserAgentDetail)(const char* sDetail);
 int		(CCONV *_RA_Shutdown)() = nullptr;
 //	Load/Save
 bool    (CCONV *_RA_ConfirmLoadNewRom)(bool bQuitting) = nullptr;
@@ -468,6 +469,7 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_HostName = (const char*(CCONV *)())                                           GetProcAddress(g_hRADLL, "_RA_HostName");
     _RA_InitI = (int(CCONV *)(HWND, int, const char*))                                GetProcAddress(g_hRADLL, "_RA_InitI");
     _RA_InitOffline = (int(CCONV *)(HWND, int, const char*))                          GetProcAddress(g_hRADLL, "_RA_InitOffline");
+    _RA_SetUserAgentDetail = (void(CCONV*)(const char*))                              GetProcAddress(g_hRADLL, "_RA_SetUserAgentDetail");
     _RA_UpdateHWnd = (void(CCONV *)(HWND))                                            GetProcAddress(g_hRADLL, "_RA_UpdateHWnd");
     _RA_Shutdown = (int(CCONV *)())                                                   GetProcAddress(g_hRADLL, "_RA_Shutdown");
     _RA_AttemptLogin = (void(CCONV *)(bool))                                          GetProcAddress(g_hRADLL, "_RA_AttemptLogin");
@@ -629,6 +631,12 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
     }
 }
 
+void RA_SetUserAgentDetail(const char* sDetail)
+{
+    if (_RA_SetUserAgentDetail != nullptr)
+        _RA_SetUserAgentDetail(sDetail);
+}
+
 void RA_InstallSharedFunctions(bool(*)(void), void(*fpCauseUnpause)(void), void(*fpCausePause)(void), void(*fpRebuildMenu)(void), void(*fpEstimateTitle)(char*), void(*fpResetEmulation)(void), void(*fpLoadROM)(const char*))
 {
     if (_RA_InstallSharedFunctions != nullptr)
@@ -652,6 +660,7 @@ void RA_Shutdown()
     _RA_HostName = nullptr;
     _RA_InitI = nullptr;
     _RA_InitOffline = nullptr;
+    _RA_SetUserAgentDetail = nullptr;
     _RA_UpdateHWnd = nullptr;
     _RA_Shutdown = nullptr;
     _RA_AttemptLogin = nullptr;
