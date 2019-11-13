@@ -66,7 +66,7 @@ enum ConsoleID
     PlayStation2 = 21,
     Xbox = 22,
     Events = 23, // not an actual console
-    XboxOne = 24,
+    PokemonMini = 24,
     Atari2600 = 25,
     MSDOS = 26,
     Arcade = 27,
@@ -96,6 +96,8 @@ enum ConsoleID
     Atari7800 = 51,
     X68K = 52,
     WonderSwan = 53,
+    CassetteVision = 54,
+    SuperCassetteVision = 55,
 
     NumConsoleIDs
 };
