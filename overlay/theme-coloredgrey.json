@@ -11,6 +11,7 @@
     },
     "Colors": {
       "Background": "#404040",
+      "MasteryBackground": "#685820",
       "Border": "#202020",
       "TextShadow": "#202020",
       "Title": "#FFFFFF",
@@ -40,5 +41,6 @@
       "ScrollBar": "#404040",
       "ScrollBarGripper": "#C0C0C0"
     }
-  }
+  },
+  "Transparent": true
 }
