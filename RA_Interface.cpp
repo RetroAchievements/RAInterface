@@ -21,6 +21,7 @@ int		(CCONV *_RA_Shutdown)() = nullptr;
 bool    (CCONV *_RA_ConfirmLoadNewRom)(bool bQuitting) = nullptr;
 int     (CCONV *_RA_OnLoadNewRom)(const BYTE* pROM, unsigned int nROMSize) = nullptr;
 unsigned int (CCONV *_RA_IdentifyRom)(const BYTE* pROM, unsigned int nROMSize) = nullptr;
+unsigned int (CCONV *_RA_IdentifyHash)(const char* sHash) = nullptr;
 void    (CCONV *_RA_ActivateGame)(unsigned int nGameId) = nullptr;
 void    (CCONV *_RA_InstallMemoryBank)(int nBankID, void* pReader, void* pWriter, int nBankSize) = nullptr;
 void    (CCONV *_RA_ClearMemoryBanks)() = nullptr;
@@ -31,6 +32,7 @@ void    (CCONV *_RA_OnReset)() = nullptr;
 void    (CCONV *_RA_DoAchievementsFrame)() = nullptr;
 //	User:
 void    (CCONV *_RA_AttemptLogin)(bool bBlocking) = nullptr;
+const char* (CCONV *_RA_UserName)() = nullptr;
 //	Tools:
 void    (CCONV *_RA_SetPaused)(bool bIsPaused) = nullptr;
 HMENU   (CCONV *_RA_CreatePopupMenu)() = nullptr;
@@ -54,6 +56,14 @@ void RA_AttemptLogin(bool bBlocking)
 {
     if (_RA_AttemptLogin != nullptr)
         _RA_AttemptLogin(bBlocking);
+}
+
+const char* RA_UserName()
+{
+    if (_RA_UserName != nullptr)
+        return _RA_UserName();
+
+    return "";
 }
 
 void RA_NavigateOverlay(ControllerInput* pInput)
@@ -89,6 +99,14 @@ unsigned int RA_IdentifyRom(BYTE* pROMData, unsigned int nROMSize)
 {
     if (_RA_IdentifyRom != nullptr)
         return _RA_IdentifyRom(pROMData, nROMSize);
+
+    return 0;
+}
+
+unsigned int RA_IdentifyHash(const char* sHash)
+{
+    if (_RA_IdentifyHash!= nullptr)
+        return _RA_IdentifyHash(sHash);
 
     return 0;
 }
@@ -473,12 +491,14 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_UpdateHWnd = (void(CCONV *)(HWND))                                            GetProcAddress(g_hRADLL, "_RA_UpdateHWnd");
     _RA_Shutdown = (int(CCONV *)())                                                   GetProcAddress(g_hRADLL, "_RA_Shutdown");
     _RA_AttemptLogin = (void(CCONV *)(bool))                                          GetProcAddress(g_hRADLL, "_RA_AttemptLogin");
+    _RA_UserName = (const char*(CCONV *)())                                           GetProcAddress(g_hRADLL, "_RA_UserName");
     _RA_NavigateOverlay = (void(CCONV *)(ControllerInput*))                           GetProcAddress(g_hRADLL, "_RA_NavigateOverlay");
     _RA_UpdateOverlay = (int(CCONV *)(ControllerInput*, float, bool, bool))           GetProcAddress(g_hRADLL, "_RA_UpdateOverlay");
     _RA_RenderOverlay = (void(CCONV *)(HDC, RECT*))                                   GetProcAddress(g_hRADLL, "_RA_RenderOverlay");
     _RA_IsOverlayFullyVisible = (bool(CCONV *)())                                     GetProcAddress(g_hRADLL, "_RA_IsOverlayFullyVisible");
     _RA_OnLoadNewRom = (int(CCONV *)(const BYTE*, unsigned int))                      GetProcAddress(g_hRADLL, "_RA_OnLoadNewRom");
     _RA_IdentifyRom = (unsigned int(CCONV *)(const BYTE*, unsigned int))              GetProcAddress(g_hRADLL, "_RA_IdentifyRom");
+    _RA_IdentifyHash = (unsigned int(CCONV *)(const char*))                           GetProcAddress(g_hRADLL, "_RA_IdentifyHash");
     _RA_ActivateGame = (void(CCONV *)(unsigned int))                                  GetProcAddress(g_hRADLL, "_RA_ActivateGame");
     _RA_InstallMemoryBank = (void(CCONV *)(int, void*, void*, int))                   GetProcAddress(g_hRADLL, "_RA_InstallMemoryBank");
     _RA_ClearMemoryBanks = (void(CCONV *)())                                          GetProcAddress(g_hRADLL, "_RA_ClearMemoryBanks");
@@ -664,12 +684,14 @@ void RA_Shutdown()
     _RA_UpdateHWnd = nullptr;
     _RA_Shutdown = nullptr;
     _RA_AttemptLogin = nullptr;
+    _RA_UserName = nullptr;
     _RA_NavigateOverlay = nullptr;
     _RA_UpdateOverlay = nullptr;
     _RA_RenderOverlay = nullptr;
     _RA_IsOverlayFullyVisible = nullptr;
     _RA_OnLoadNewRom = nullptr;
     _RA_IdentifyRom = nullptr;
+    _RA_IdentifyHash = nullptr;
     _RA_ActivateGame = nullptr;
     _RA_InstallMemoryBank = nullptr;
     _RA_ClearMemoryBanks = nullptr;
