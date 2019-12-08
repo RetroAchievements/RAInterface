@@ -149,8 +149,14 @@ extern bool RA_IsOverlayFullyVisible();
 //	Attempts to login, or show login dialog.
 extern void RA_AttemptLogin(bool bBlocking);
 
+//  Returns the user name of the currently logged in user - empty if no user is logged in.
+const char* RA_UserName();
+
 //  Gets the unique identifier of the game associated to the provided ROM data
 extern unsigned int RA_IdentifyRom(BYTE* pROMData, unsigned int nROMSize);
+
+//  Gets the unique identifier of the game associated to the provided hash
+extern unsigned int RA_IdentifyHash(const char* sHash);
 
 //  Downloads and activates the achievements for the specified game.
 extern void RA_ActivateGame(unsigned int nGameId);
