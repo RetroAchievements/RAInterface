@@ -434,9 +434,9 @@ static void FetchIntegrationFromWeb(const char* sHostName, DWORD* pStatusCode)
     {
         DWORD nBytesRead = 0;
 #if defined(_M_X64) || defined(__amd64__)
-        char* remote_name = "bin/RA_Integration_x64.dll"
+        const char* remote_name = "bin/RA_Integration_x64.dll";
 #else
-        char* remote_name = "bin/RA_Integration.dll"
+        const char* remote_name = "bin/RA_Integration.dll";
 #endif
         if (DoBlockingHttpGetWithRetry(sHostName, remote_name, buffer, MAX_SIZE, &nBytesRead, pStatusCode))
             WriteBufferToFile(GetIntegrationPath(), buffer, nBytesRead);
@@ -584,9 +584,9 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
     ZeroMemory(buffer, 1024);
 
 #if defined(_M_X64) || defined(__amd64__)
-        char* latest_page = "LatestIntegration64.html"
+    const char* latest_page = "LatestIntegration64.html";
 #else
-        char* latest_page = "LatestIntegration.html"
+    const char* latest_page = "LatestIntegration.html";
 #endif
 
     if (DoBlockingHttpGetWithRetry(sHostName, latest_page, buffer, 1024, &nBytesRead, &nStatusCode) == FALSE)
