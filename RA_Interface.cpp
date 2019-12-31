@@ -283,7 +283,7 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
                 nullptr,
                 WINHTTP_NO_REFERER,
                 WINHTTP_DEFAULT_ACCEPT_TYPES,
-                0);
+                (nPort == INTERNET_DEFAULT_HTTPS_PORT) ? WINHTTP_FLAG_SECURE : 0);
 
             // Send a Request.
             if (hRequest == nullptr)
