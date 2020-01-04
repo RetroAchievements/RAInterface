@@ -12,6 +12,7 @@
 //	Generic:
 const char* (CCONV *_RA_IntegrationVersion)() = nullptr;
 const char* (CCONV *_RA_HostName)() = nullptr;
+const char* (CCONV *_RA_HostUrl)() = nullptr;
 int		(CCONV *_RA_InitI)(HWND hMainWnd, int nConsoleID, const char* sClientVer) = nullptr;
 int		(CCONV *_RA_InitOffline)(HWND hMainWnd, int nConsoleID, const char* sClientVer) = nullptr;
 void    (CCONV *_RA_UpdateHWnd)(HWND hMainHWND);
@@ -219,7 +220,8 @@ bool RA_WarnDisableHardcore(const char* sActivity)
     return false;
 }
 
-static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage, char* pBufferOut, unsigned int nBufferOutSize, DWORD* pBytesRead, DWORD* pStatusCode)
+static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage, const char* sPostData,
+  char* pBufferOut, unsigned int nBufferOutSize, DWORD* pBytesRead, DWORD* pStatusCode)
 {
     BOOL bResults = FALSE, bSuccess = FALSE;
     HINTERNET hSession = nullptr, hConnect = nullptr, hRequest = nullptr;
@@ -229,6 +231,18 @@ static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage,
     DWORD nBytesToRead = 0;
     DWORD nBytesFetched = 0;
     (*pBytesRead) = 0;
+
+    INTERNET_PORT nPort = INTERNET_DEFAULT_HTTP_PORT;
+    const char* sHostName = sHostUrl;
+    if (_strnicmp(sHostName, "http://", 7) == 0)
+    {
+        sHostName += 7;
+    }
+    else if (_strnicmp(sHostName, "https://", 8) == 0)
+    {
+        sHostName += 8;
+        nPort = INTERNET_DEFAULT_HTTPS_PORT;
+    }
 
     // Use WinHttpOpen to obtain a session handle.
     hSession = WinHttpOpen(L"RetroAchievements Client Bootstrap",
@@ -248,7 +262,7 @@ static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage,
 #else
         nTemp = mbstowcs(wBuffer, sHostName, strlen(sHostName) + 1);
 #endif
-        hConnect = WinHttpConnect(hSession, wBuffer, INTERNET_DEFAULT_HTTP_PORT, 0);
+        hConnect = WinHttpConnect(hSession, wBuffer, nPort, 0);
 
         // Create an HTTP Request handle.
         if (hConnect == nullptr)
@@ -264,12 +278,12 @@ static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage,
 #endif
 
             hRequest = WinHttpOpenRequest(hConnect,
-                L"GET",
+                sPostData ? L"POST" : L"GET",
                 wBuffer,
                 nullptr,
                 WINHTTP_NO_REFERER,
                 WINHTTP_DEFAULT_ACCEPT_TYPES,
-                0);
+                (nPort == INTERNET_DEFAULT_HTTPS_PORT) ? WINHTTP_FLAG_SECURE : 0);
 
             // Send a Request.
             if (hRequest == nullptr)
@@ -278,13 +292,19 @@ static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage,
             }
             else
             {
-                bResults = WinHttpSendRequest(hRequest,
-                    L"Content-Type: application/x-www-form-urlencoded",
-                    0,
-                    WINHTTP_NO_REQUEST_DATA,
-                    0,
-                    0,
-                    0);
+                if (sPostData)
+                {
+                    const size_t nPostDataLength = strlen(sPostData);
+                    bResults = WinHttpSendRequest(hRequest,
+                        L"Content-Type: application/x-www-form-urlencoded",
+                        0, (LPVOID)sPostData, nPostDataLength, nPostDataLength, 0);
+                }
+                else
+                {
+                    bResults = WinHttpSendRequest(hRequest,
+                        L"Content-Type: application/x-www-form-urlencoded",
+                        0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+                }
 
                 if (!bResults || !WinHttpReceiveResponse(hRequest, nullptr))
                 {
@@ -342,12 +362,13 @@ static BOOL DoBlockingHttpGet(const char* sHostName, const char* sRequestedPage,
     return bSuccess;
 }
 
-static BOOL DoBlockingHttpGetWithRetry(const char* sHostName, const char* sRequestedPage, char* pBufferOut, unsigned int nBufferOutSize, DWORD* pBytesRead, DWORD* pStatusCode)
+static BOOL DoBlockingHttpCallWithRetry(const char* sHostUrl, const char* sRequestedPage, const char* sPostData,
+  char pBufferOut[], unsigned int nBufferOutSize, DWORD* pBytesRead, DWORD* pStatusCode)
 {
     int nRetries = 4;
     do
     {
-        if (DoBlockingHttpGet(sHostName, sRequestedPage, pBufferOut, nBufferOutSize, pBytesRead, pStatusCode) != FALSE)
+        if (DoBlockingHttpCall(sHostUrl, sRequestedPage, sPostData, pBufferOut, nBufferOutSize, pBytesRead, pStatusCode) != FALSE)
             return TRUE;
 
         switch (*pStatusCode)
@@ -422,7 +443,7 @@ static void WriteBufferToFile(const std::wstring& sFile, const char* sBuffer, in
     }
 }
 
-static void FetchIntegrationFromWeb(const char* sHostName, DWORD* pStatusCode)
+static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
 {
     const int MAX_SIZE = 2 * 1024 * 1024;
     char* buffer = new char[MAX_SIZE];
@@ -433,14 +454,34 @@ static void FetchIntegrationFromWeb(const char* sHostName, DWORD* pStatusCode)
     else
     {
         DWORD nBytesRead = 0;
-#if defined(_M_X64) || defined(__amd64__)
-        const char* remote_name = "bin/RA_Integration_x64.dll";
-#else
-        const char* remote_name = "bin/RA_Integration.dll";
-#endif
-        if (DoBlockingHttpGetWithRetry(sHostName, remote_name, buffer, MAX_SIZE, &nBytesRead, pStatusCode))
-            WriteBufferToFile(GetIntegrationPath(), buffer, nBytesRead);
 
+        char* pSplit = sLatestVersionUrl + 8; /* skip over protocol */
+        while (*pSplit != '/')
+        {
+            if (!*pSplit)
+            {
+                *pStatusCode = 997;
+                return;
+            }
+            ++pSplit;
+        }
+        *pSplit++ = '\0';
+
+        if (DoBlockingHttpCallWithRetry(sLatestVersionUrl, pSplit, nullptr, buffer, MAX_SIZE, &nBytesRead, pStatusCode))
+        {
+            /* wait up to one second for the DLL to actually be released - sometimes it's not immediate */
+            for (int i = 0; i < 10; i++)
+            {
+                if (GetModuleHandleW(L"RA_Integration.dll") == nullptr)
+                    break;
+
+                Sleep(100);
+            }
+
+            WriteBufferToFile(GetIntegrationPath(), buffer, nBytesRead);
+        }
+
+        pSplit[-1] = '/';
         delete[](buffer);
         buffer = nullptr;
     }
@@ -480,8 +521,8 @@ static const char* CCONV _RA_InstallIntegration()
     if (g_hRADLL == nullptr)
     {
         char buffer[1024];
-        sprintf_s(buffer, 1024, "LoadLibrary failed: %d\n%s\n", ::GetLastError(), GetLastErrorAsString().c_str());
-        MessageBoxA(nullptr, buffer, "Sorry!", MB_OK | MB_ICONWARNING);
+        sprintf_s(buffer, 1024, "Could not load RA_Integration.dll: %d\n%s\n", ::GetLastError(), GetLastErrorAsString().c_str());
+        MessageBoxA(nullptr, buffer, "Warning", MB_OK | MB_ICONWARNING);
 
         return "0.000";
     }
@@ -490,6 +531,7 @@ static const char* CCONV _RA_InstallIntegration()
 
     _RA_IntegrationVersion = (const char*(CCONV *)())                                 GetProcAddress(g_hRADLL, "_RA_IntegrationVersion");
     _RA_HostName = (const char*(CCONV *)())                                           GetProcAddress(g_hRADLL, "_RA_HostName");
+    _RA_HostUrl = (const char*(CCONV *)())                                            GetProcAddress(g_hRADLL, "_RA_HostUrl");
     _RA_InitI = (int(CCONV *)(HWND, int, const char*))                                GetProcAddress(g_hRADLL, "_RA_InitI");
     _RA_InitOffline = (int(CCONV *)(HWND, int, const char*))                          GetProcAddress(g_hRADLL, "_RA_InitOffline");
     _RA_SetUserAgentDetail = (void(CCONV*)(const char*))                              GetProcAddress(g_hRADLL, "_RA_SetUserAgentDetail");
@@ -524,6 +566,54 @@ static const char* CCONV _RA_InstallIntegration()
     return _RA_IntegrationVersion ? _RA_IntegrationVersion() : "0.000";
 }
 
+static void GetJsonField(const char* sJson, const char* sField, char *pBuffer, size_t nBufferSize)
+{
+    const size_t nFieldSize = strlen(sField);
+    const char* pValue;
+
+    *pBuffer = 0;
+    do
+    {
+        const char* pScan = strstr(sJson, sField);
+        if (!pScan)
+            return;
+
+        if (pScan[-1] != '"' || pScan[nFieldSize] != '"')
+        {
+            sJson = pScan + 1;
+            continue;
+        }
+
+        pScan += nFieldSize + 1;
+        while (*pScan == ':' || isspace(*pScan))
+            ++pScan;
+        if (*pScan != '"')
+            return;
+
+        pValue = ++pScan;
+        while (*pScan != '"')
+        {
+            if (!*pScan)
+                return;
+
+            ++pScan;
+        }
+
+        while (pValue < pScan && nBufferSize > 1)
+        {
+            if (*pValue == '\\')
+                ++pValue;
+
+            *pBuffer++ = *pValue++;
+            nBufferSize--;
+        }
+
+        *pBuffer = '\0';
+        return;
+
+    } while (1);
+}
+
 static unsigned long long ParseVersion(const char* sVersion)
 {
     char* pPart;
@@ -550,31 +640,40 @@ static unsigned long long ParseVersion(const char* sVersion)
 }
 
 //	Console IDs: see enum EmulatorID in header
-void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
+void RA_Init(HWND hMainHWND, int nEmulatorID, const char* sClientVersion)
 {
-    const char* sVerInstalled = _RA_InstallIntegration();
+    char sVerInstalled[32];
+#if defined(_MSC_VER) && _MSC_VER >= 1400
+    strcpy_s(sVerInstalled, sizeof(sVerInstalled), _RA_InstallIntegration());
+#else
+    strcpy(sVerInstalled, _RA_InstallIntegration());
+#endif
 
-    char sHostName[256] = "";
-    if (_RA_HostName != nullptr)
+    char sHostUrl[256] = "";
+    if (_RA_HostUrl != nullptr)
     {
 #if defined(_MSC_VER) && _MSC_VER >= 1400
-        strcpy_s(sHostName, sizeof(sHostName), _RA_HostName());
+        strcpy_s(sHostUrl, sizeof(sHostUrl), _RA_HostUrl());
 #else
-        strcpy(sHostName, _RA_HostName());
+        strcpy(sHostUrl, _RA_HostUrl());
 #endif
+    }
+    else if (_RA_HostName != nullptr)
+    {
+      sprintf_s(sHostUrl, "http://%s", _RA_HostName());
     }
 
-    if (!sHostName[0])
+    if (!sHostUrl[0])
     {
 #if defined(_MSC_VER) && _MSC_VER >= 1400
-        strcpy_s(sHostName, sizeof(sHostName), "www.retroachievements.org");
+        strcpy_s(sHostUrl, sizeof(sHostUrl), "http://retroachievements.org");
 #else
-        strcpy(sHostName, "www.retroachievements.org");
+        strcpy(sHostUrl, "http://retroachievements.org");
 #endif
     }
-    else if (_RA_InitOffline != nullptr && strcmp(sHostName, "OFFLINE") == 0)
+    else if (_RA_InitOffline != nullptr && strcmp(sHostUrl, "http://OFFLINE") == 0)
     {
-        _RA_InitOffline(hMainHWND, nConsoleID, sClientVersion);
+        _RA_InitOffline(hMainHWND, nEmulatorID, sClientVersion);
         return;
     }
 
@@ -583,24 +682,18 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
     char buffer[1024];
     ZeroMemory(buffer, 1024);
 
-#if defined(_M_X64) || defined(__amd64__)
-    const char* latest_page = "LatestIntegration64.html";
-#else
-    const char* latest_page = "LatestIntegration.html";
-#endif
-
-    if (DoBlockingHttpGetWithRetry(sHostName, latest_page, buffer, 1024, &nBytesRead, &nStatusCode) == FALSE)
+    if (DoBlockingHttpCallWithRetry(sHostUrl, "dorequest.php", "r=latestintegration", buffer, 1024, &nBytesRead, &nStatusCode) == FALSE)
     {
         if (_RA_InitOffline != nullptr)
         {
-            sprintf_s(buffer, sizeof(buffer) / sizeof(buffer[0]), "Cannot access %s (status code %u)\nWorking offline.", sHostName, nStatusCode);
+            sprintf_s(buffer, sizeof(buffer), "Cannot access %s (status code %u)\nWorking offline.", sHostUrl, nStatusCode);
             MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
 
-            _RA_InitOffline(hMainHWND, nConsoleID, sClientVersion);
+            _RA_InitOffline(hMainHWND, nEmulatorID, sClientVersion);
         }
         else
         {
-            sprintf_s(buffer, sizeof(buffer) / sizeof(buffer[0]), "Cannot access %s (status code %u)\nPlease try again later.", sHostName, nStatusCode);
+            sprintf_s(buffer, sizeof(buffer), "Cannot access %s (status code %u)\nPlease try again later.", sHostUrl, nStatusCode);
             MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
 
             RA_Shutdown();
@@ -608,57 +701,90 @@ void RA_Init(HWND hMainHWND, int nConsoleID, const char* sClientVersion)
         return;
     }
 
-    // remove trailing whitespace
-    size_t nIndex = strlen(buffer);
-    while (nIndex > 0 && isspace(buffer[nIndex - 1]))
-        --nIndex;
-    buffer[nIndex] = '\0';
+    char sLatestVersionUrl[256];
+    char sVersionBuffer[32];
+    GetJsonField(buffer, "MinimumVersion", sVersionBuffer, sizeof(sVersionBuffer));
+    const unsigned long long nMinimumDLLVer = ParseVersion(sVersionBuffer);
 
-    // expected response is a single line containing the version of the DLL available on the server (i.e. 0.074 or 0.074.1)
-    const unsigned long long nLatestDLLVer = ParseVersion(buffer);
+    GetJsonField(buffer, "LatestVersion", sVersionBuffer, sizeof(sVersionBuffer));
+    const unsigned long long nLatestDLLVer = ParseVersion(sVersionBuffer);
 
-    unsigned long long nVerInstalled = ParseVersion(sVerInstalled);
-    if (nVerInstalled < nLatestDLLVer)
+#if defined(_M_X64) || defined(__amd64__)
+    GetJsonField(buffer, "LatestVersionUrlX64", sLatestVersionUrl, sizeof(sLatestVersionUrl));
+#else
+    GetJsonField(buffer, "LatestVersionUrl", sLatestVersionUrl, sizeof(sLatestVersionUrl));
+#endif
+
+    if (nLatestDLLVer == 0 || !sLatestVersionUrl[0])
     {
-        RA_Shutdown();	//	Unhook the DLL, it's out of date. We may need to overwrite it.
+        /* NOTE: repurposing sLatestVersionUrl for the error message */
+        GetJsonField(buffer, "Error", sLatestVersionUrl, sizeof(sLatestVersionUrl));
+        if (sLatestVersionUrl[0])
+            sprintf_s(buffer, sizeof(buffer), "Failed to fetch latest integration version.\n\n%s", sLatestVersionUrl);
+        else
+            sprintf_s(buffer, sizeof(buffer), "The latest integration check did not return a valid response.");
 
-        char sErrorMsg[2048];
-        sprintf_s(sErrorMsg, 2048, "%s\nLatest Version: %s\n%s",
-            nVerInstalled == 0 ?
-            "Cannot find or load RA_Integration.dll" :
-            "A new version of the RetroAchievements Toolset is available!",
-            buffer,
-            "Automatically update your RetroAchievements Toolset file?");
+        MessageBoxA(hMainHWND, buffer, "Error", MB_OK | MB_ICONERROR);
+        RA_Shutdown();
+        return;
+    }
 
-        int nMBReply = MessageBoxA(hMainHWND, sErrorMsg, "Warning", MB_YESNO | MB_ICONWARNING);
-        if (nMBReply == IDYES)
+    int nMBReply = IDCONTINUE;
+    unsigned long long nVerInstalled = ParseVersion(sVerInstalled);
+    if (nVerInstalled < nMinimumDLLVer)
+    {
+        RA_Shutdown(); // Unhook the DLL so we can replace it.
+
+        if (nVerInstalled == 0)
         {
-            FetchIntegrationFromWeb(sHostName, &nStatusCode);
+            sprintf_s(buffer, sizeof(buffer), "Install RetroAchievements toolset?\n\n"
+                "In order to earn achievements you must download the toolset library.");
+        }
+        else
+        {
+            sprintf_s(buffer, sizeof(buffer), "Upgrade RetroAchievements toolset?\n\n"
+                "A required upgrade to the toolset is available. If you don't upgrade, you won't be able to earn achievements.\n\n"
+                "Latest Version: %s\nInstalled Version: %s", sVersionBuffer, sVerInstalled);
+        }
 
-            if (nStatusCode == 200)
-            {
-                sVerInstalled = _RA_InstallIntegration();
-                nVerInstalled = ParseVersion(sVerInstalled);
-            }
+        nMBReply = MessageBoxA(hMainHWND, buffer, "Warning", MB_YESNO | MB_ICONWARNING);
+    }
+    else if (nVerInstalled < nLatestDLLVer)
+    {
+        sprintf_s(buffer, sizeof(buffer), "Upgrade RetroAchievements toolset?\n\n"
+            "An optional upgrade to the toolset is available.\n\n"
+            "Latest Version: %s\nInstalled Version: %s", sVersionBuffer, sVerInstalled);
 
-            if (nVerInstalled < nLatestDLLVer)
-            {
-                sprintf_s(buffer, sizeof(buffer) / sizeof(buffer[0]), "Failed to update Toolset (status code %u).", nStatusCode);
-                MessageBoxA(hMainHWND, buffer, "Error", MB_OK | MB_ICONERROR);
-            }
+        nMBReply = MessageBoxA(hMainHWND, buffer, "Warning", MB_YESNO | MB_ICONWARNING);
+
+        if (nMBReply == IDYES)
+            RA_Shutdown(); // Unhook the DLL so we can replace it.
+    }
+
+    if (nMBReply == IDYES)
+    {
+        FetchIntegrationFromWeb(sLatestVersionUrl, &nStatusCode);
+
+        if (nStatusCode == 200)
+            nVerInstalled = ParseVersion(_RA_InstallIntegration());
+
+        if (nVerInstalled < nLatestDLLVer)
+        {
+            sprintf_s(buffer, sizeof(buffer), "Failed to update toolset (status code %u).", nStatusCode);
+            MessageBoxA(hMainHWND, buffer, "Error", MB_OK | MB_ICONERROR);
         }
     }
 
-    if (nVerInstalled < nLatestDLLVer)
+    if (nVerInstalled < nMinimumDLLVer)
     {
         RA_Shutdown();
 
-        sprintf_s(buffer, sizeof(buffer) / sizeof(buffer[0]), "The latest Toolset is required to earn achievements.");
+        sprintf_s(buffer, sizeof(buffer), "%s toolset is required to earn achievements.", nVerInstalled == 0 ? "The" : "A newer");
         MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
     }
     else
     {
-        if (!_RA_InitI(hMainHWND, nConsoleID, sClientVersion))
+        if (!_RA_InitI(hMainHWND, nEmulatorID, sClientVersion))
             RA_Shutdown();
     }
 }
@@ -680,16 +806,21 @@ void RA_Shutdown()
     //	Call shutdown on toolchain
     if (_RA_Shutdown != nullptr)
     {
+#ifdef __cplusplus
         try {
+#endif
             _RA_Shutdown();
+#ifdef __cplusplus
         }
         catch (std::runtime_error&) {
         }
+#endif
     }
 
     //	Clear func ptrs
     _RA_IntegrationVersion = nullptr;
     _RA_HostName = nullptr;
+    _RA_HostUrl = nullptr;
     _RA_InitI = nullptr;
     _RA_InitOffline = nullptr;
     _RA_SetUserAgentDetail = nullptr;
@@ -721,7 +852,7 @@ void RA_Shutdown()
     _RA_WarnDisableHardcore = nullptr;
     _RA_InstallSharedFunctions = nullptr;
 
-    //	Uninstall DLL
+    /* unload the DLL */
     if (g_hRADLL)
     {
         FreeLibrary(g_hRADLL);
