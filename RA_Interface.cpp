@@ -515,7 +515,7 @@ static const char* CCONV _RA_InstallIntegration()
 
     DWORD dwAttrib = GetFileAttributesW(sIntegrationPath.c_str());
     if (dwAttrib == INVALID_FILE_ATTRIBUTES)
-        return "0.000";
+        return "0.0";
 
     g_hRADLL = LoadLibraryW(sIntegrationPath.c_str());
     if (g_hRADLL == nullptr)
@@ -524,7 +524,7 @@ static const char* CCONV _RA_InstallIntegration()
         sprintf_s(buffer, 1024, "Could not load RA_Integration.dll: %d\n%s\n", ::GetLastError(), GetLastErrorAsString().c_str());
         MessageBoxA(nullptr, buffer, "Warning", MB_OK | MB_ICONWARNING);
 
-        return "0.000";
+        return "0.0";
     }
 
     //	Install function pointers one by one
@@ -563,7 +563,7 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_WarnDisableHardcore = (bool(CCONV *)(const char*))                            GetProcAddress(g_hRADLL, "_RA_WarnDisableHardcore");
     _RA_InstallSharedFunctions = (void(CCONV *)(bool(*)(), void(*)(), void(*)(), void(*)(), void(*)(char*), void(*)(), void(*)(const char*))) GetProcAddress(g_hRADLL, "_RA_InstallSharedFunctionsExt");
 
-    return _RA_IntegrationVersion ? _RA_IntegrationVersion() : "0.000";
+    return _RA_IntegrationVersion ? _RA_IntegrationVersion() : "0.0";
 }
 
 static void GetJsonField(const char* sJson, const char* sField, char *pBuffer, size_t nBufferSize)
@@ -699,6 +699,18 @@ void RA_Init(HWND hMainHWND, int nEmulatorID, const char* sClientVersion)
             RA_Shutdown();
         }
         return;
+    }
+
+    /* remove trailing zeros from client version */
+    char* ptr = sVerInstalled + strlen(sVerInstalled);
+    while (ptr[-1] == '0' && ptr[-2] == '.' && (ptr - 2) > sVerInstalled)
+        ptr -= 2;
+    *ptr = '\0';
+    if (strchr(sVerInstalled, '.') == NULL)
+    {
+        *ptr++ = '.';
+        *ptr++ = '0';
+        *ptr = '\0';
     }
 
     char sLatestVersionUrl[256];
