@@ -35,6 +35,7 @@ enum EmulatorID
     RA_AppleWin = 10,
     RA_Oricutron = 11,
     RA_MelonDS = 12,
+    RA_SCV = 13,
 
     NumEmulatorIDs,
     UnknownEmulator = NumEmulatorIDs
