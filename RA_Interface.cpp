@@ -313,7 +313,7 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
                     const size_t nPostDataLength = strlen(sPostData);
                     bResults = WinHttpSendRequest(hRequest,
                         L"Content-Type: application/x-www-form-urlencoded",
-                        0, (LPVOID)sPostData, nPostDataLength, nPostDataLength, 0);
+                        0, (LPVOID)sPostData, (DWORD)nPostDataLength, (DWORD)nPostDataLength, 0);
                 }
                 else
                 {
