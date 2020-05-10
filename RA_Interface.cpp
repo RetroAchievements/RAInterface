@@ -28,6 +28,8 @@ void    (CCONV *_RA_InstallMemoryBank)(int nBankID, void* pReader, void* pWriter
 void    (CCONV *_RA_ClearMemoryBanks)() = nullptr;
 void    (CCONV *_RA_OnLoadState)(const char* sFilename) = nullptr;
 void    (CCONV *_RA_OnSaveState)(const char* sFilename) = nullptr;
+int     (CCONV *_RA_CaptureState)(char* pBuffer, int nBufferSize) = nullptr;
+void    (CCONV *_RA_RestoreState)(const char* pBuffer) = nullptr;
 void    (CCONV *_RA_OnReset)() = nullptr;
 //	Achievements:
 void    (CCONV *_RA_DoAchievementsFrame)() = nullptr;
@@ -178,6 +180,20 @@ void RA_OnSaveState(const char* sFilename)
 {
     if (_RA_OnSaveState != nullptr)
         _RA_OnSaveState(sFilename);
+}
+
+int RA_CaptureState(char* pBuffer, int nBufferSize)
+{
+    if (_RA_CaptureState != nullptr)
+        return _RA_CaptureState(pBuffer, nBufferSize);
+
+    return 0;
+}
+
+void RA_RestoreState(const char* pBuffer)
+{
+    if (_RA_RestoreState != nullptr)
+        _RA_RestoreState(pBuffer);
 }
 
 void RA_OnReset()
@@ -556,6 +572,8 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_SetPaused = (void(CCONV *)(bool))                                             GetProcAddress(g_hRADLL, "_RA_SetPaused");
     _RA_OnLoadState = (void(CCONV *)(const char*))                                    GetProcAddress(g_hRADLL, "_RA_OnLoadState");
     _RA_OnSaveState = (void(CCONV *)(const char*))                                    GetProcAddress(g_hRADLL, "_RA_OnSaveState");
+    _RA_CaptureState = (int(CCONV *)(char*, int))                                     GetProcAddress(g_hRADLL, "_RA_CaptureState");
+    _RA_RestoreState = (void(CCONV *)(const char*))                                   GetProcAddress(g_hRADLL, "_RA_RestoreState");
     _RA_OnReset = (void(CCONV *)())                                                   GetProcAddress(g_hRADLL, "_RA_OnReset");
     _RA_DoAchievementsFrame = (void(CCONV *)())                                       GetProcAddress(g_hRADLL, "_RA_DoAchievementsFrame");
     _RA_SetConsoleID = (int(CCONV *)(unsigned int))                                   GetProcAddress(g_hRADLL, "_RA_SetConsoleID");
@@ -857,6 +875,8 @@ void RA_Shutdown()
     _RA_SetPaused = nullptr;
     _RA_OnLoadState = nullptr;
     _RA_OnSaveState = nullptr;
+    _RA_CaptureState = nullptr;
+    _RA_RestoreState = nullptr;
     _RA_OnReset = nullptr;
     _RA_DoAchievementsFrame = nullptr;
     _RA_SetConsoleID = nullptr;
