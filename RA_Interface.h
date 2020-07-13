@@ -66,7 +66,7 @@ enum ConsoleID
     WIIU = 20,
     PlayStation2 = 21,
     Xbox = 22,
-    Events = 23, // not an actual console
+    MagnavoxOdyssey = 23,
     PokemonMini = 24,
     Atari2600 = 25,
     MSDOS = 26,
@@ -99,6 +99,13 @@ enum ConsoleID
     WonderSwan = 53,
     CassetteVision = 54,
     SuperCassetteVision = 55,
+    NeoGeoCD = 56,
+    FairchildChannelF = 57,
+    FMTowns = 58,
+    ZXSpectrum = 59,
+    GameAndWatch = 60,
+    NokiaNGage = 61,
+    Nintendo3DS = 62,
 
     NumConsoleIDs
 };
