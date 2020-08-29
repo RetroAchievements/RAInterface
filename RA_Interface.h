@@ -1,221 +1,347 @@
 #ifndef RA_INTERFACE_H
 #define RA_INTERFACE_H
-#pragma once
 
-//	NB. Shared between RA_Integration and emulator
-typedef int BOOL;
+#include <wtypes.h> /* HWND */
 
-#ifndef CCONV
-#define CCONV __cdecl
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-struct ControllerInput
-{
-    BOOL m_bUpPressed;
-    BOOL m_bDownPressed;
-    BOOL m_bLeftPressed;
-    BOOL m_bRightPressed;
-    BOOL m_bConfirmPressed; // Usually C or A
-    BOOL m_bCancelPressed;  // Usually B
-    BOOL m_bQuitPressed;    // Usually Start
-};
+/******************************
+ * Initialization             *
+ ******************************/
 
-enum EmulatorID
-{
-    RA_Gens = 0,
-    RA_Project64 = 1,
-    RA_Snes9x = 2,
-    RA_VisualboyAdvance = 3,
-    RA_Nester = 4,
-    RA_FCEUX = 5,
-    RA_PCE = 6,
-    RA_Libretro = 7,
-    RA_Meka = 8,
-    RA_QUASI88 = 9,
-    RA_AppleWin = 10,
-    RA_Oricutron = 11,
-    RA_MelonDS = 12,
+/**
+ * Loads and initializes the DLL.
+ *
+ * Must be called before using any of the other functions. Will automatically download the DLL
+ * if not found, or prompt the user to upgrade if a newer version is available
+ *
+ * @param hMainHWND       the handle of the main window
+ * @param nEmulatorID     the unique idenfier of the emulator
+ * @param sClientVersion  the current version of the emulator (will be validated against the minimum version for the specified emulator ID)
+ */
+extern void RA_Init(HWND hMainHWND, int nEmulatorID, const char* sClientVersion);
 
-    NumEmulatorIDs,
-    UnknownEmulator = NumEmulatorIDs
-};
+/**
+ * Loads and initializes the DLL.
+ *
+ * Must be called before using any of the other functions. Will automatically download the DLL
+ * if not found, or prompt the user to upgrade if a newer version is available
+ *
+ * @param hMainHWND       the handle of the main window
+ * @param sClientName     the name of the client, displayed in the title bar and included in the User-Agent for API calls
+ * @param sClientVersion  the current version of the client
+ */
+extern void RA_InitClient(HWND hMainHWND, const char* sClientName, const char* sClientVersion);
 
-//	Should match DB!
-enum ConsoleID
-{
-    UnknownConsoleID = 0,
-    MegaDrive = 1, //	DB
-    N64 = 2,
-    SNES = 3,
-    GB = 4,
-    GBA = 5,
-    GBC = 6,
-    NES = 7,
-    PCEngine = 8,
-    SegaCD = 9,
-    Sega32X = 10,
-    MasterSystem = 11,
-    PlayStation = 12,
-    Lynx = 13,
-    NeoGeoPocket = 14,
-    GameGear = 15,
-    GameCube = 16,
-    Jaguar = 17,
-    DS = 18,
-    WII = 19,
-    WIIU = 20,
-    PlayStation2 = 21,
-    Xbox = 22,
-    MagnavoxOdyssey = 23,
-    PokemonMini = 24,
-    Atari2600 = 25,
-    MSDOS = 26,
-    Arcade = 27,
-    VirtualBoy = 28,
-    MSX = 29,
-    C64 = 30,
-    ZX81 = 31,
-    Oric = 32,
-    SG1000 = 33,
-    VIC20 = 34,
-    Amiga = 35,
-    AmigaST = 36,
-    AmstradCPC = 37,
-    AppleII = 38,
-    Saturn = 39,
-    Dreamcast = 40,
-    PSP = 41,
-    CDi = 42,
-    ThreeDO = 43,
-    Colecovision = 44,
-    Intellivision = 45,
-    Vectrex = 46,
-    PC8800 = 47,
-    PC9800 = 48,
-    PCFX = 49,
-    Atari5200 = 50,
-    Atari7800 = 51,
-    X68K = 52,
-    WonderSwan = 53,
-    CassetteVision = 54,
-    SuperCassetteVision = 55,
-    NeoGeoCD = 56,
-    FairchildChannelF = 57,
-    FMTowns = 58,
-    ZXSpectrum = 59,
-    GameAndWatch = 60,
-    NokiaNGage = 61,
-    Nintendo3DS = 62,
+/**
+ * Defines callbacks that the DLL can use to interact with the client.
+ *
+ * @param fpUnusedIsActive  [no longer used] returns non-zero if a game is running
+ * @param fpCauseUnpause    unpauses the emulator
+ * @param fpCausePause      pauses the emulator
+ * @param fpRebuildMenu     notifies the client that the popup menu has changed (@see RA_CreatePopupMenu)
+ * @param fpEstimateTitle   gets a short description for the game being loaded (parameter is a 256-byte buffer to fill)
+ * @param fpResetEmulator   resets the emulator
+ * @param fpLoadROM         [currently unused] tells the emulator to load a specific game
+ */
+extern void RA_InstallSharedFunctions(int (*fpUnusedIsActive)(void),
+    void (*fpCauseUnpause)(void), void (*fpCausePause)(void), void (*fpRebuildMenu)(void),
+    void (*fpEstimateTitle)(char*), void (*fpResetEmulator)(void), void (*fpLoadROM)(const char*));
 
-    NumConsoleIDs
-};
+/**
+ * Creates a popup menu that can be appended to the main menu of the emulator.
+ *
+ * @return                handle to the menu. if not attached to the program menu, caller must destroy it themselves.
+ */
+extern HMENU RA_CreatePopupMenu(void);
 
-#ifndef RA_EXPORTS
-
-#include <wtypes.h>
-
-//
-//	Note: any changes in these files will require a full binary release of the emulator!
-//	 This file will be fully included in the emulator build as standard.
-//
-
-// resource values for menu items - needed by MFC ON_COMMAND_RANGE macros
-// they're not all currently used, allowing additional items without forcing recompilation of the emulators
+/* Resource values for menu items - needed by MFC ON_COMMAND_RANGE macros or WM_COMMAND WndProc handlers
+ * they're not all currently used, allowing additional items without forcing recompilation of the emulators
+ */
 #define IDM_RA_MENUSTART 1700
 #define IDM_RA_MENUEND 1739
 
-//	Captures the RA_DLL and installs/allocs all required information.
-//	Populates all function pointers so they can be used by the app.
-extern void RA_Init(HWND hMainHWND, /*enum EmulatorID*/ int emulator, const char* sClientVersion);
-
-//  Specifies additional information to include in the UserAgent string.
-extern void RA_SetUserAgentDetail(const char* sDetail);
-
-//  Updates the handle for the emulator window.
-extern void RA_UpdateHWnd(HWND hMainHWND);
-
-//	Call with shared function pointers from app.
-extern void RA_InstallSharedFunctions(bool (*fpUnusedIsActive)(void), void (*fpCauseUnpause)(void),
-                                      void (*fpCausePause)(void), void (*fpRebuildMenu)(void),
-                                      void (*fpEstimateTitle)(char*), void (*fpResetEmulator)(void),
-                                      void (*fpLoadROM)(const char*));
-
-//	Shuts down, tidies up and deallocs the RA DLL from the app's perspective.
-extern void RA_Shutdown();
-
-//	Perform one test for all achievements in the current set. Call this once per frame/cycle.
-extern void RA_DoAchievementsFrame();
-
-//	Updates and renders all on-screen overlays.
-extern void RA_UpdateRenderOverlay(HDC hDC, struct ControllerInput* pInput, float fDeltaTime, RECT* prcSize, bool Full_Screen,
-                                   bool Paused);
-extern void RA_NavigateOverlay(struct ControllerInput* pInput);
-
-//  Determines if the overlay is completely covering the screen.
-extern bool RA_IsOverlayFullyVisible();
-
-//	Attempts to login, or show login dialog.
-extern void RA_AttemptLogin(bool bBlocking);
-
-//  Returns the user name of the currently logged in user - empty if no user is logged in.
-const char* RA_UserName();
-
-//  Gets the unique identifier of the game associated to the provided ROM data
-extern unsigned int RA_IdentifyRom(BYTE* pROMData, unsigned int nROMSize);
-
-//  Gets the unique identifier of the game associated to the provided hash
-extern unsigned int RA_IdentifyHash(const char* sHash);
-
-//  Downloads and activates the achievements for the specified game.
-extern void RA_ActivateGame(unsigned int nGameId);
-
-//	Downloads and activates the achievements for the game associated to the provided ROM data
-extern void RA_OnLoadNewRom(BYTE* pROMData, unsigned int nROMSize);
-
-//	Clear all memory banks before installing any new ones!
-extern void RA_ClearMemoryBanks();
-
-//	Call once for each memory bank found, immediately after a new rom or load
-// pReader is typedef unsigned char (_RAMByteReadFn)( size_t nOffset );
-// pWriter is typedef void (_RAMByteWriteFn)( unsigned int nOffs, unsigned int nVal );
-extern void RA_InstallMemoryBank(int nBankID, void* pReader, void* pWriter, int nBankSize);
-
-//	Call this before loading a new ROM or quitting, to ensure no developer changes are lost.
-extern bool RA_ConfirmLoadNewRom(bool bIsQuitting);
-
-//	Should be called every time the app's title should change.
-extern void RA_UpdateAppTitle(const char* sCustomMsg);
-
-//	Call when you wish to recreate the popup menu.
-extern HMENU RA_CreatePopupMenu();
-
-//	Should be called as regularly as possible from the emulator's main thread.
-extern void RA_HandleHTTPResults();
-
-//	Should be called to update RA whenever the emulator's 'paused' state changes.
-extern void RA_SetPaused(bool bIsPaused);
-
-//	With multiple platform emulators, call this immediately before loading a new ROM.
-extern void RA_SetConsoleID(unsigned int nConsoleID);
-
-//  Should be called before performing an activity that is not allowed in hardcore mode to
-//  give the user a chance to disable hardcore mode and continue with the activity.
-//  Returns TRUE if hardcore was disabled, or FALSE to cancel the activity.
-extern bool RA_WarnDisableHardcore(const char* sActivity);
-
-//	Should be called immediately after loading or saving a new state.
-extern void RA_OnLoadState(const char* sFilename);
-extern void RA_OnSaveState(const char* sFilename);
-
-//  Should be called immediately after resetting the system.
-extern void RA_OnReset();
-
-//	Call this on response to a menu selection for any RA ID:
+/**
+ * Called when a menu item in the popup menu is selected.
+ *
+ * @param nID             the ID of the menu item (will be between IDM_RA_MENUSTART and IDM_RA_MENUEND)
+ */
 extern void RA_InvokeDialog(LPARAM nID);
 
-//	Returns TRUE if HC mode is ongoing
-extern int RA_HardcoreModeIsActive();
+/**
+ * Provides additional information to include in the User-Agent string for API calls.
+ *
+ * This is primarily used to identify dependencies or configurations (such as libretro core versions)
+ *
+ * @param sDetail         the additional information to include
+ */
+extern void RA_SetUserAgentDetail(const char* sDetail);
 
-#endif // RA_EXPORTS
+/**
+ * Attempts to log in to the retroachievements.org site.
+ *
+ * Prompts the user for their login credentials and performs the login. If they've previously logged in and have
+ * chosen to store their credentials, the login occurs without prompting.
+ *
+ * @param bBlocking       if zero, control is returned to the calling process while the login request is processed by the server.
+ */
+extern void RA_AttemptLogin(int bBlocking);
+
+/**
+ * Specifies the console associated to the emulator.
+ *
+ * May be called just before loading a game if the emulator supports multiple consoles.
+ *
+ * @param nConsoleID      the unique identifier of the console associated to the game being loaded.
+ */
+extern void RA_SetConsoleID(unsigned int nConsoleID);
+
+/**
+ * Resets memory references created by previous calls to RA_InstallMemoryBank.
+ */
+extern void RA_ClearMemoryBanks(void);
+
+typedef unsigned char (RA_ReadMemoryFunc)(unsigned int nAddress);
+typedef void (RA_WriteMemoryFunc)(unsigned int nAddress, unsigned int nValue);
+/**
+ * Exposes a block of memory to the DLL.
+ *
+ * The blocks of memory expected by the DLL are unique per console ID. To identify the correct map for a console,
+ * view the consoleinfo.c file in the rcheevos repository.
+ *
+ * @param nBankID         the index of the bank to update. will replace any existing bank at that index.
+ * @param pReader         a function to read from the bank. parameter is the offset within the bank to read from.
+ * @param pWriter         a function to write to the bank. parameters are the offset within the bank to write to and an 8-bit value to write.
+ * @param nBankSize       the size of the bank.
+ */
+extern void RA_InstallMemoryBank(int nBankID, RA_ReadMemoryFunc pReader, RA_WriteMemoryFunc pWriter, int nBankSize);
+
+/**
+ * Deinitializes and unloads the DLL.
+ */
+extern void RA_Shutdown(void);
+
+
+
+/******************************
+ * Overlay                    *
+ ******************************/
+
+/**
+ * Determines if the overlay is fully visible.
+ *
+ * Precursor check before calling RA_NavigateOverlay
+ *
+ * @return                non-zero if the overlay is fully visible, zero if it is not.
+ */
+extern int RA_IsOverlayFullyVisible(void);
+
+/**
+ * Called to show or hide the overlay.
+ *
+ * @param bIsPaused       true to show the overlay, false to hide it.
+ */
+extern void RA_SetPaused(bool bIsPaused);
+
+struct ControllerInput
+{
+    int m_bUpPressed;
+    int m_bDownPressed;
+    int m_bLeftPressed;
+    int m_bRightPressed;
+    int m_bConfirmPressed; /* Usually C or A */
+    int m_bCancelPressed;  /* Usually B */
+    int m_bQuitPressed;    /* Usually Start */
+};
+
+/**
+ * Passes controller input to the overlay.
+ *
+ * Does nothing if the overlay is not fully visible.
+ *
+ * @param pInput          pointer to a ControllerInput structure indicating which inputs are active.
+ */
+extern void RA_NavigateOverlay(struct ControllerInput* pInput);
+
+/**
+ * [deprecated] Updates the overlay for a single frame.
+ *
+ * This function just calls RA_NavigateOverlay. Updating and rendering is now handled internally to the DLL.
+ */
+extern void RA_UpdateRenderOverlay(HDC, struct ControllerInput* pInput, float, RECT*, bool, bool);
+
+/**
+ * Updates the handle to the main window.
+ *
+ * The main window handle is used to anchor the overlay. If the client recreates the handle as the result of switching
+ * from windowed mode to full screen, or for any other reason, it should call this to reattach the overlay.
+ *
+ * @param hMainHWND       the new handle of the main window
+ */
+extern void RA_UpdateHWnd(HWND hMainHWND);
+
+
+
+/******************************
+ * Game Management            *
+ ******************************/
+
+/**
+ * Identifies the game associated to a block of memory.
+ *
+ * The block of memory is the fully buffered game file. If more complicated identification is required, the caller
+ * needs to link against rcheevos/rhash directly to generate the hash, and call RA_IdentifyHash with the result.
+ * Can be called when switching discs to ensure the additional discs are still associated to the loaded game.
+ *
+ * @param pROMData        the contents of the game file
+ * @param nROMSize        the size of the game file
+ * @return                the unique identifier of the game, 0 if no association available.
+ */
+extern unsigned int RA_IdentifyRom(BYTE* pROMData, unsigned int nROMSize);
+
+/**
+ * Identifies the game associated to a pre-generated hash.
+ *
+ * Used when the hash algorithm is something other than full file.
+ * Can be called when switching discs to ensure the additional discs are still associated to the loaded game.
+ *
+ * @param sHash           the hash generated by rcheevos/rhash
+ * @return                the unique identifier of the game, 0 if no association available.
+ */
+extern unsigned int RA_IdentifyHash(const char* sHash);
+
+/**
+ * Fetches all retroachievements related data for the specified game.
+ *
+ * @param nGameId         the unique identifier of the game to activate
+ */
+extern void RA_ActivateGame(unsigned int nGameId);
+
+/**
+ * Identifies and activates the game associated to a block of memory.
+ *
+ * Functions as a call to RA_IdentifyRom followed by a call to RA_ActivateGame.
+ *
+ * @param pROMData        the contents of the game file
+ * @param nROMSize        the size of the game file
+ */
+extern void RA_OnLoadNewRom(BYTE* pROMData, unsigned int nROMSize);
+
+/**
+ * Called before unloading the game to allow the user to save any changes they might have.
+ *
+ * @param bIsQuitting     non-zero to change the messaging to indicate the emulator is closing.
+ * @return                zero to abort the unload. non-zero to continue.
+ */
+extern int RA_ConfirmLoadNewRom(int bIsQuitting);
+
+
+
+/******************************
+ * Runtime Functionality      *
+ ******************************/
+
+/**
+ * Does all achievement-related processing for a single frame.
+ */
+extern void RA_DoAchievementsFrame(void);
+
+/**
+ * [deprecated] Used to be used to ensure the asynchronous server calls are processed on the UI thread.
+ * That's all managed within the DLL now. Calling this function does nothing.
+ */
+extern void RA_HandleHTTPResults(void);
+
+/**
+ * Adds flavor text to the application title bar.
+ *
+ * Application title bar is managed by the DLL. Value will be "ClientName - Version - Flavor Text - Username"
+ *
+ * @param sCustomMessage  the flavor text to include in the title bar.
+ */
+extern void RA_UpdateAppTitle(const char* sCustomMessage);
+
+/**
+ * Get the user name of the currently logged in user.
+ *
+ * @return                user name of the currently logged in user, empty if no user is logged in. 
+ */
+const char* RA_UserName(void);
+
+/**
+ * Determines if the user is currently playing with hardcore enabled.
+ *
+ * The client should disable any features that would give the player an unfair advantage if this returns non-zero.
+ * Things like loading states, using cheats, modifying RAM, disabling rendering layers, viewing decoded tilemaps, etc.
+ *
+ * @return                non-zero if hardcore mode is currently active.
+ */
+extern int RA_HardcoreModeIsActive(void);
+
+/**
+ * Warns the user they're about to do something that will disable hardcore mode.
+ *
+ * @param sActivity       what the user is about to do (i.e. "load a state").
+ * @return                non-zero if the user disabled hardcore and the activity is allowed.
+ *                        zero if the user declined to disable hardcore and the activity should be aborted.
+ */
+extern int RA_WarnDisableHardcore(const char* sActivity);
+
+/**
+ * Disables hardcore mode without prompting or notifying the user.
+ *
+ * Should only be called if the client does its own prompting/notification.
+ * Typically used when an activity cannot be aborted.
+ */
+extern void RA_DisableHardcore(void);
+
+/**
+ * Notifies the DLL that the game has been reset.
+ *
+ * Disables active leaderboards and resets hit counts on all active achievements.
+ */
+extern void RA_OnReset(void);
+
+/**
+ * Notifies the DLL that a save state has been created.
+ *
+ * Creates a .rap file next to the state file that contains achievement-related information for the save state.
+ *
+ * @param sFilename       full path to the save state file.
+ */
+extern void RA_OnSaveState(const char* sFilename);
+
+/**
+ * Notifies the DLL that a save state has been loaded.
+ *
+ * Loads the .rap file next to the state file that contains achievement-related information for the save state being loaded.
+ *
+ * @param sFilename       full path to the save state file.
+ */
+extern void RA_OnLoadState(const char* sFilename);
+
+/**
+ * Captures the current state of the achievement runtime for inclusion in a save state.
+ *
+ * @param pBuffer         buffer to write achievement state information to
+ * @param nBufferSize     the size of the buffer
+ * @return                the number of bytes needed to capture the achievement state. if less than nBufferSize, pBuffer
+ *                        will not be populated. the function should be called again with a larger buffer.
+ */
+extern int RA_CaptureState(char* pBuffer, int nBufferSize);
+
+/**
+ * Restores the state of the achievement runtime from a previously captured state.
+ *
+ * @param pBuffer         buffer containing previously serialized achievement state information
+ */
+extern void RA_RestoreState(const char* pBuffer);
+
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif // !RA_INTERFACE_H
