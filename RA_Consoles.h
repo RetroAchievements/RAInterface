@@ -40,7 +40,7 @@ enum ConsoleID
     SG1000 = 33,
     VIC20 = 34,
     Amiga = 35,
-    AmigaST = 36,
+    AtariST = 36,
     AmstradCPC = 37,
     AppleII = 38,
     Saturn = 39,
