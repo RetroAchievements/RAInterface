@@ -24,7 +24,7 @@ static void         (CCONV* _RA_SetUserAgentDetail)(const char* sDetail);
 static void         (CCONV* _RA_AttemptLogin)(int bBlocking) = nullptr;
 static int          (CCONV* _RA_SetConsoleID)(unsigned int nConsoleID) = nullptr;
 static void         (CCONV* _RA_ClearMemoryBanks)() = nullptr;
-static void         (CCONV* _RA_InstallMemoryBank)(int nBankID, void* pReader, void* pWriter, int nBankSize) = nullptr;
+static void         (CCONV* _RA_InstallMemoryBank)(int nBankID, RA_ReadMemoryFunc* pReader, RA_WriteMemoryFunc* pWriter, int nBankSize) = nullptr;
 static int          (CCONV* _RA_Shutdown)() = nullptr;
 // Overlay
 static int          (CCONV* _RA_IsOverlayFullyVisible)() = nullptr;
@@ -278,7 +278,10 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
 #else
         nTemp = mbstowcs(wBuffer, sHostName, strlen(sHostName) + 1);
 #endif
-        hConnect = WinHttpConnect(hSession, wBuffer, nPort, 0);
+        if (nTemp > 0)
+        {
+            hConnect = WinHttpConnect(hSession, wBuffer, nPort, 0);
+        }
 
         // Create an HTTP Request handle.
         if (hConnect == nullptr)
@@ -559,7 +562,7 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_AttemptLogin = (void(CCONV*)(int))                                           GetProcAddress(g_hRADLL, "_RA_AttemptLogin");
     _RA_SetConsoleID = (int(CCONV*)(unsigned int))                                   GetProcAddress(g_hRADLL, "_RA_SetConsoleID");
     _RA_ClearMemoryBanks = (void(CCONV*)())                                          GetProcAddress(g_hRADLL, "_RA_ClearMemoryBanks");
-    _RA_InstallMemoryBank = (void(CCONV*)(int, void*, void*, int))                   GetProcAddress(g_hRADLL, "_RA_InstallMemoryBank");
+    _RA_InstallMemoryBank = (void(CCONV*)(int, RA_ReadMemoryFunc*, RA_WriteMemoryFunc*, int)) GetProcAddress(g_hRADLL, "_RA_InstallMemoryBank");
     _RA_Shutdown = (int(CCONV*)())                                                   GetProcAddress(g_hRADLL, "_RA_Shutdown");
     _RA_IsOverlayFullyVisible = (int(CCONV*)())                                      GetProcAddress(g_hRADLL, "_RA_IsOverlayFullyVisible");
     _RA_SetPaused = (void(CCONV*)(int))                                              GetProcAddress(g_hRADLL, "_RA_SetPaused");
