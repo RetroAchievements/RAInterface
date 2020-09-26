@@ -104,7 +104,7 @@ extern void RA_SetConsoleID(unsigned int nConsoleID);
 extern void RA_ClearMemoryBanks(void);
 
 typedef unsigned char (RA_ReadMemoryFunc)(unsigned int nAddress);
-typedef void (RA_WriteMemoryFunc)(unsigned int nAddress, unsigned int nValue);
+typedef void (RA_WriteMemoryFunc)(unsigned int nAddress, unsigned char nValue);
 /**
  * Exposes a block of memory to the DLL.
  *
