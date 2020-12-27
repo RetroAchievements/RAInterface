@@ -39,6 +39,8 @@ static int          (CCONV* _RA_OnLoadNewRom)(const BYTE* pROM, unsigned int nRO
 static int          (CCONV* _RA_ConfirmLoadNewRom)(int bQuitting) = nullptr;
 // Runtime Functionality
 static void         (CCONV* _RA_DoAchievementsFrame)() = nullptr;
+static void         (CCONV* _RA_SuspendRepaint)() = nullptr;
+static void         (CCONV* _RA_ResumeRepaint)() = nullptr;
 static void         (CCONV* _RA_UpdateAppTitle)(const char* pMessage) = nullptr;
 static const char*  (CCONV* _RA_UserName)() = nullptr;
 static int          (CCONV* _RA_HardcoreModeIsActive)(void) = nullptr;
@@ -199,6 +201,18 @@ void RA_DoAchievementsFrame(void)
 {
     if (_RA_DoAchievementsFrame != nullptr)
         _RA_DoAchievementsFrame();
+}
+
+void RA_SuspendRepaint(void)
+{
+  if (_RA_SuspendRepaint != nullptr)
+    _RA_SuspendRepaint();
+}
+
+void RA_ResumeRepaint(void)
+{
+  if (_RA_ResumeRepaint != nullptr)
+    _RA_ResumeRepaint();
 }
 
 void RA_SetConsoleID(unsigned int nConsoleID)
@@ -574,6 +588,8 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_OnLoadNewRom = (int(CCONV*)(const BYTE*, unsigned int))                      GetProcAddress(g_hRADLL, "_RA_OnLoadNewRom");
     _RA_ConfirmLoadNewRom = (int(CCONV*)(int))                                       GetProcAddress(g_hRADLL, "_RA_ConfirmLoadNewRom");
     _RA_DoAchievementsFrame = (void(CCONV*)())                                       GetProcAddress(g_hRADLL, "_RA_DoAchievementsFrame");
+    _RA_SuspendRepaint = (void(CCONV*)())                                            GetProcAddress(g_hRADLL, "_RA_SuspendRepaint");
+    _RA_ResumeRepaint = (void(CCONV*)())                                             GetProcAddress(g_hRADLL, "_RA_ResumeRepaint");
     _RA_UpdateAppTitle = (void(CCONV*)(const char*))                                 GetProcAddress(g_hRADLL, "_RA_UpdateAppTitle");
     _RA_UserName = (const char* (CCONV*)())                                          GetProcAddress(g_hRADLL, "_RA_UserName");
     _RA_HardcoreModeIsActive = (int(CCONV*)())                                       GetProcAddress(g_hRADLL, "_RA_HardcoreModeIsActive");
@@ -894,6 +910,8 @@ void RA_Shutdown()
     _RA_OnLoadNewRom = nullptr;
     _RA_ConfirmLoadNewRom = nullptr;
     _RA_DoAchievementsFrame = nullptr;
+    _RA_SuspendRepaint = nullptr;
+    _RA_ResumeRepaint = nullptr;
     _RA_UpdateAppTitle = nullptr;
     _RA_UserName = nullptr;
     _RA_HardcoreModeIsActive = nullptr;
