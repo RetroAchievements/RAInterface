@@ -249,6 +249,18 @@ extern int RA_ConfirmLoadNewRom(int bIsQuitting);
 extern void RA_DoAchievementsFrame(void);
 
 /**
+ * Temporarily disables forced updating of tool windows.
+ *
+ * Primarily used while fast-forwarding.
+ */
+extern void RA_SuspendRepaint(void);
+
+/**
+ * Resumes forced updating of tool windows.
+ */
+extern void RA_ResumeRepaint(void);
+
+/**
  * [deprecated] Used to be used to ensure the asynchronous server calls are processed on the UI thread.
  * That's all managed within the DLL now. Calling this function does nothing.
  */
