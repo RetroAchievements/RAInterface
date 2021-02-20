@@ -51,6 +51,15 @@ extern void RA_InstallSharedFunctions(int (*fpUnusedIsActive)(void),
     void (*fpEstimateTitle)(char*), void (*fpResetEmulator)(void), void (*fpLoadROM)(const char*));
 
 /**
+ * Tells the DLL to use UpdateWindow instead of InvalidateRect when the UI needs to be repainted. This is primarily
+ * necessary when integrating with an emulator using the SDL library as it keeps the message queue flooded so the
+ * InvalidateRect messages never get turned into WM_PAINT messages.
+ *
+ * @param bEnable         non-zero if InvalidateRect calls should be replaced with UpdateWindow
+ */
+extern void RA_SetForceRepaint(int bEnable);
+
+/**
  * Creates a popup menu that can be appended to the main menu of the emulator.
  *
  * @return                handle to the menu. if not attached to the program menu, caller must destroy it themselves.

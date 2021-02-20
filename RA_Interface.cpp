@@ -18,6 +18,7 @@ static int          (CCONV* _RA_InitOffline)(HWND hMainWnd, int nConsoleID, cons
 static int          (CCONV* _RA_InitClient)(HWND hMainWnd, const char* sClientName, const char* sClientVer) = nullptr;
 static int          (CCONV* _RA_InitClientOffline)(HWND hMainWnd, const char* sClientName, const char* sClientVer) = nullptr;
 static void         (CCONV* _RA_InstallSharedFunctions)(int(*)(), void(*)(), void(*)(), void(*)(), void(*)(char*), void(*)(), void(*)(const char*)) = nullptr;
+static void         (CCONV* _RA_SetForceRepaint)(int bEnable) = nullptr;
 static HMENU        (CCONV* _RA_CreatePopupMenu)() = nullptr;
 static void         (CCONV* _RA_InvokeDialog)(LPARAM nID) = nullptr;
 static void         (CCONV* _RA_SetUserAgentDetail)(const char* sDetail);
@@ -201,6 +202,12 @@ void RA_DoAchievementsFrame(void)
 {
     if (_RA_DoAchievementsFrame != nullptr)
         _RA_DoAchievementsFrame();
+}
+
+void RA_SetForceRepaint(int bEnable)
+{
+    if (_RA_SetForceRepaint != nullptr)
+        _RA_SetForceRepaint(bEnable);
 }
 
 void RA_SuspendRepaint(void)
@@ -570,6 +577,7 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_InitClient = (int(CCONV*)(HWND, const char*, const char*))                   GetProcAddress(g_hRADLL, "_RA_InitClient");
     _RA_InitClientOffline = (int(CCONV*)(HWND, const char*, const char*))            GetProcAddress(g_hRADLL, "_RA_InitClientOffline");
     _RA_InstallSharedFunctions = (void(CCONV*)(int(*)(), void(*)(), void(*)(), void(*)(), void(*)(char*), void(*)(), void(*)(const char*))) GetProcAddress(g_hRADLL, "_RA_InstallSharedFunctionsExt");
+    _RA_SetForceRepaint = (void(CCONV*)(int))                                        GetProcAddress(g_hRADLL, "_RA_SetForceRepaint");
     _RA_CreatePopupMenu = (HMENU(CCONV*)(void))                                      GetProcAddress(g_hRADLL, "_RA_CreatePopupMenu");
     _RA_InvokeDialog = (void(CCONV*)(LPARAM))                                        GetProcAddress(g_hRADLL, "_RA_InvokeDialog");
     _RA_SetUserAgentDetail = (void(CCONV*)(const char*))                             GetProcAddress(g_hRADLL, "_RA_SetUserAgentDetail");
@@ -892,6 +900,7 @@ void RA_Shutdown()
     _RA_InitClient = nullptr;
     _RA_InitClientOffline = nullptr;
     _RA_InstallSharedFunctions = nullptr;
+    _RA_SetForceRepaint = nullptr;
     _RA_CreatePopupMenu = nullptr;
     _RA_InvokeDialog = nullptr;
     _RA_SetUserAgentDetail = nullptr;
