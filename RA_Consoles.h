@@ -67,6 +67,10 @@ enum ConsoleID
     GameAndWatch = 60,
     NokiaNGage = 61,
     Nintendo3DS = 62,
+    Supervision = 63,
+    SharpX1 = 64,
+    Tic80 = 65,
+    ThomsonTO8 = 66,
 
     NumConsoleIDs
 };
