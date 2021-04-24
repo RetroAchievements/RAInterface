@@ -48,8 +48,19 @@ set BRANCH_INFO=%ACTIVE_BRANCH%
 
 rem === Build the product version. If on a branch, include the branch name ===
 set VERSION_PRODUCT=%VERSION_TAG%
-if not "%ACTIVE_BRANCH%"=="master" (
-    set VERSION_PRODUCT=%VERSION_PRODUCT%-%ACTIVE_BRANCH%
+
+if "%ACTIVE_BRANCH:~0,5%" == "alpha" (
+    set /A "PRERELEASE_VERSION_MINOR=%VERSION_MINOR%+1"
+) else if "%ACTIVE_BRANCH:~0,4%" == "beta" (
+    set /A "PRERELEASE_VERSION_MINOR=%VERSION_MINOR%+1"
+)
+
+if not "%ACTIVE_BRANCH%" == "master" (
+    if not "%PRERELEASE_VERSION_MINOR%" == "" (
+        set VERSION_PRODUCT=%VERSION_MAJOR%.%PRERELEASE_VERSION_MINOR%-%ACTIVE_BRANCH%
+    ) else if not "%ACTIVE_BRANCH:~-6%" == "-fixes" (
+        set VERSION_PRODUCT=%VERSION_PRODUCT%-%ACTIVE_BRANCH%
+    )
 )
 
 rem === If there are any local modifications, increment revision ===
