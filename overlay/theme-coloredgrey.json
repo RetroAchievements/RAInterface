@@ -11,6 +11,7 @@
     },
     "Colors": {
       "Background": "#404040",
+      "NonHardcoreBackground": "#405068",
       "MasteryBackground": "#685820",
       "Border": "#202020",
       "TextShadow": "#202020",
