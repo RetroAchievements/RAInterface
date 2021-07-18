@@ -485,7 +485,7 @@ static void WriteBufferToFile(const std::wstring& sFile, const char* sBuffer, in
 
 static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
 {
-    const int MAX_SIZE = 2 * 1024 * 1024;
+    const int MAX_SIZE = 3 * 1024 * 1024;
     char* buffer = new char[MAX_SIZE];
     if (buffer == nullptr)
     {
