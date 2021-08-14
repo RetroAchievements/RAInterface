@@ -257,14 +257,46 @@ void RA_DisableHardcore()
         _RA_WarnDisableHardcore(nullptr);
 }
 
+static size_t DownloadToFile(char* pData, size_t nDataSize, void* pUserData)
+{
+    FILE* file = (FILE*)pUserData;
+    return fwrite(pData, 1, nDataSize, file);
+}
+
+typedef struct DownloadBuffer
+{
+    char* pBuffer;
+    size_t nBufferSize;
+    size_t nOffset;
+} DownloadBuffer;
+
+static size_t DownloadToBuffer(char* pData, size_t nDataSize, void* pUserData)
+{
+    DownloadBuffer* pBuffer = (DownloadBuffer*)pUserData;
+    const size_t nRemaining = pBuffer->nBufferSize - pBuffer->nOffset;
+    if (nDataSize > nRemaining)
+        nDataSize = nRemaining;
+
+    if (nDataSize > 0)
+    {
+        memcpy(pBuffer->pBuffer + pBuffer->nOffset, pData, nDataSize);
+        pBuffer->nOffset += nDataSize;
+    }
+
+    return nDataSize;
+}
+
+typedef size_t (DownloadFunc)(char* pData, size_t nDataSize, void* pUserData);
+
 static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage, const char* sPostData,
-  char* pBufferOut, unsigned int nBufferOutSize, DWORD* pBytesRead, DWORD* pStatusCode)
+  DownloadFunc fnDownload, void* pDownloadUserData, DWORD* pBytesRead, DWORD* pStatusCode)
 {
     BOOL bResults = FALSE, bSuccess = FALSE;
     HINTERNET hSession = nullptr, hConnect = nullptr, hRequest = nullptr;
 
     WCHAR wBuffer[1024];
     size_t nTemp;
+    DWORD nBytesAvailable = 0;
     DWORD nBytesToRead = 0;
     DWORD nBytesFetched = 0;
     (*pBytesRead) = 0;
@@ -352,42 +384,51 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
                 }
                 else
                 {
+                    char buffer[16384];
                     DWORD dwSize = sizeof(DWORD);
                     WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, pStatusCode, &dwSize, WINHTTP_NO_HEADER_INDEX);
 
-                    nBytesToRead = 0;
-                    WinHttpQueryDataAvailable(hRequest, &nBytesToRead);
-
                     bSuccess = TRUE;
-                    while (nBytesToRead > 0)
+                    do
                     {
-                        if (nBytesToRead > nBufferOutSize)
-                        {
-                            if (*pStatusCode == 200)
-                                *pStatusCode = 998;
-
-                            bSuccess = FALSE;
+                        nBytesAvailable = 0;
+                        WinHttpQueryDataAvailable(hRequest, &nBytesAvailable);
+                        if (nBytesAvailable == 0)
                             break;
-                        }
 
-                        nBytesFetched = 0;
-                        if (WinHttpReadData(hRequest, pBufferOut, nBytesToRead, &nBytesFetched))
+                        do
                         {
-                            pBufferOut += nBytesFetched;
-                            nBufferOutSize -= nBytesFetched;
-                            (*pBytesRead) += nBytesFetched;
-                        }
-                        else
-                        {
-                            if (*pStatusCode == 200)
-                                *pStatusCode = GetLastError();
+                            if (nBytesAvailable > sizeof(buffer))
+                                nBytesToRead = sizeof(buffer);
+                            else
+                                nBytesToRead = nBytesAvailable;
 
-                            bSuccess = FALSE;
-                            break;
-                        }
+                            nBytesFetched = 0;
+                            if (WinHttpReadData(hRequest, buffer, nBytesToRead, &nBytesFetched))
+                            {
+                                size_t nBytesWritten = fnDownload(buffer, nBytesFetched, pDownloadUserData);
+                                if (nBytesWritten < nBytesFetched)
+                                {
+                                    if (*pStatusCode == 200)
+                                        *pStatusCode = 998;
 
-                        WinHttpQueryDataAvailable(hRequest, &nBytesToRead);
-                    }
+                                    bSuccess = FALSE;
+                                    break;
+                                }
+
+                                (*pBytesRead) += nBytesWritten;
+                                nBytesAvailable -= nBytesFetched;
+                            }
+                            else
+                            {
+                                if (*pStatusCode == 200)
+                                    *pStatusCode = GetLastError();
+
+                                bSuccess = FALSE;
+                                break;
+                            }
+                        } while (nBytesAvailable > 0);
+                    } while (TRUE);
                 }
 
                 WinHttpCloseHandle(hRequest);
@@ -402,38 +443,68 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
     return bSuccess;
 }
 
+static BOOL IsNetworkError(DWORD nStatusCode)
+{
+    switch (nStatusCode)
+    {
+        case 12002: // timeout
+        case 12007: // dns lookup failed
+        case 12017: // handle closed before request completed
+        case 12019: // handle not initialized
+        case 12028: // data not available at this time
+        case 12029: // handshake failed
+        case 12030: // connection aborted
+        case 12031: // connection reset
+        case 12032: // explicit request to retry
+        case 12152: // response could not be parsed, corrupt?
+        case 12163: // lost connection during request
+            return TRUE;
+
+        default:
+            return FALSE;
+    }
+}
+
 static BOOL DoBlockingHttpCallWithRetry(const char* sHostUrl, const char* sRequestedPage, const char* sPostData,
   char pBufferOut[], unsigned int nBufferOutSize, DWORD* pBytesRead, DWORD* pStatusCode)
 {
     int nRetries = 4;
     do
     {
-        if (DoBlockingHttpCall(sHostUrl, sRequestedPage, sPostData, pBufferOut, nBufferOutSize, pBytesRead, pStatusCode) != FALSE)
+        DownloadBuffer downloadBuffer;
+        memset(&downloadBuffer, 0, sizeof(downloadBuffer));
+        downloadBuffer.pBuffer = pBufferOut;
+        downloadBuffer.nBufferSize = nBufferOutSize;
+
+        if (DoBlockingHttpCall(sHostUrl, sRequestedPage, sPostData, DownloadToBuffer, &downloadBuffer, pBytesRead, pStatusCode) != FALSE)
             return TRUE;
 
-        switch (*pStatusCode)
-        {
-            case 12002: // timeout
-            case 12007: // dns lookup failed
-            case 12017: // handle closed before request completed
-            case 12019: // handle not initialized
-            case 12028: // data not available at this time
-            case 12029: // handshake failed
-            case 12030: // connection aborted
-            case 12031: // connection reset
-            case 12032: // explicit request to retry
-            case 12152: // response could not be parsed, corrupt?
-            case 12163: // lost connection during request
-                --nRetries;
-                break;
+        if (!IsNetworkError(*pStatusCode))
+            return FALSE;
 
-            default:
-                return FALSE;
-        }
-
+        --nRetries;
     } while (nRetries);
 
     return FALSE;
+}
+
+static BOOL DoBlockingHttpCallWithRetry(const char* sHostUrl, const char* sRequestedPage, const char* sPostData,
+  FILE* pFile, DWORD* pBytesRead, DWORD* pStatusCode)
+{
+  int nRetries = 4;
+  do
+  {
+      fseek(pFile, 0, SEEK_SET);
+      if (DoBlockingHttpCall(sHostUrl, sRequestedPage, sPostData, DownloadToFile, pFile, pBytesRead, pStatusCode) != FALSE)
+        return TRUE;
+
+      if (!IsNetworkError(*pStatusCode))
+        return FALSE;
+
+      --nRetries;
+  } while (nRetries);
+
+  return FALSE;
 }
 
 #ifndef RA_UTEST
@@ -454,76 +525,81 @@ static std::wstring GetIntegrationPath()
 }
 #endif
 
-static void WriteBufferToFile(const std::wstring& sFile, const char* sBuffer, int nBytes)
+static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
 {
+    DWORD nBytesRead = 0;
+    const wchar_t* sDownloadFilename = L"RA_Integration.download";
+    const wchar_t* sFilename = L"RA_Integration.dll";
+    const wchar_t* sOldFilename = L"RA_Integration.old";
+
 #if defined(_MSC_VER) && _MSC_VER >= 1400
     FILE* pf;
-    errno_t nErr = _wfopen_s(&pf, sFile.c_str(), L"wb");
+    errno_t nErr = _wfopen_s(&pf, sDownloadFilename, L"wb");
 #else
-    FILE* pf = _wfopen(sFile.c_str(), L"wb");
+    FILE* pf = _wfopen(sDownloadFilename, L"wb");
 #endif
 
-    if (pf != nullptr)
-    {
-        fwrite(sBuffer, 1, nBytes, pf);
-        fclose(pf);
-    }
-    else
+    if (!pf)
     {
 #if defined(_MSC_VER) && _MSC_VER >= 1400
         wchar_t sErrBuffer[2048];
-        _wcserror_s(sErrBuffer, sizeof(sErrBuffer)/sizeof(sErrBuffer[0]), nErr);
+        _wcserror_s(sErrBuffer, sizeof(sErrBuffer) / sizeof(sErrBuffer[0]), nErr);
 
-        std::wstring sErrMsg = L"Unable to write " + sFile + L"\n" + sErrBuffer;
+        std::wstring sErrMsg = std::wstring(L"Unable to write ") + sOldFilename + L"\n" + sErrBuffer;
 #else
-        std::wstring sErrMsg = L"Unable to write " + sFile + L"\n" + _wcserror(errno);
+        std::wstring sErrMsg = std::wstring(L"Unable to write ") + sOldFilename + L"\n" + _wcserror(errno);
 #endif
 
         MessageBoxW(nullptr, sErrMsg.c_str(), L"Error", MB_OK | MB_ICONERROR);
+        return;
     }
-}
 
-static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
-{
-    const int MAX_SIZE = 2 * 1024 * 1024;
-    char* buffer = new char[MAX_SIZE];
-    if (buffer == nullptr)
+    char* pSplit = sLatestVersionUrl + 8; /* skip over protocol */
+    while (*pSplit != '/')
     {
-        *pStatusCode = 999;
+        if (!*pSplit)
+        {
+            *pStatusCode = 997;
+            return;
+        }
+        ++pSplit;
+    }
+    *pSplit++ = '\0';
+
+    if (DoBlockingHttpCallWithRetry(sLatestVersionUrl, pSplit, nullptr, pf, &nBytesRead, pStatusCode))
+    {
+        fclose(pf);
+
+        /* wait up to one second for the DLL to actually be released - sometimes it's not immediate */
+        for (int i = 0; i < 10; i++)
+        {
+            if (GetModuleHandleW(sFilename) == nullptr)
+                break;
+
+            Sleep(100);
+        }
+
+        // delete the last old dll if it's still present
+        DeleteFileW(sOldFilename);
+
+        // if there's a dll present, rename it
+        if (GetFileAttributesW(sFilename) != INVALID_FILE_ATTRIBUTES &&
+            !MoveFileW(sFilename, sOldFilename))
+        {
+            MessageBoxW(nullptr, L"Could not rename old dll", L"Error", MB_OK | MB_ICONERROR);
+        }
+        // rename the download to be the dll
+        else if (!MoveFileW(sDownloadFilename, sFilename))
+        {
+            MessageBoxW(nullptr, L"Could not rename new dll", L"Error", MB_OK | MB_ICONERROR);
+        }
+
+        // delete the old dll
+        DeleteFileW(sOldFilename);
     }
     else
     {
-        DWORD nBytesRead = 0;
-
-        char* pSplit = sLatestVersionUrl + 8; /* skip over protocol */
-        while (*pSplit != '/')
-        {
-            if (!*pSplit)
-            {
-                *pStatusCode = 997;
-                return;
-            }
-            ++pSplit;
-        }
-        *pSplit++ = '\0';
-
-        if (DoBlockingHttpCallWithRetry(sLatestVersionUrl, pSplit, nullptr, buffer, MAX_SIZE, &nBytesRead, pStatusCode))
-        {
-            /* wait up to one second for the DLL to actually be released - sometimes it's not immediate */
-            for (int i = 0; i < 10; i++)
-            {
-                if (GetModuleHandleW(L"RA_Integration.dll") == nullptr)
-                    break;
-
-                Sleep(100);
-            }
-
-            WriteBufferToFile(GetIntegrationPath(), buffer, nBytesRead);
-        }
-
-        pSplit[-1] = '/';
-        delete[](buffer);
-        buffer = nullptr;
+        fclose(pf);
     }
 }
 
@@ -729,7 +805,7 @@ static void RA_InitCommon(HWND hMainHWND, int nEmulatorID, const char* sClientNa
     char buffer[1024];
     ZeroMemory(buffer, 1024);
 
-    if (DoBlockingHttpCallWithRetry(sHostUrl, "dorequest.php", "r=latestintegration", buffer, 1024, &nBytesRead, &nStatusCode) == FALSE)
+    if (DoBlockingHttpCallWithRetry(sHostUrl, "dorequest.php", "r=latestintegration", buffer, sizeof(buffer), &nBytesRead, &nStatusCode) == FALSE)
     {
         if (_RA_InitOffline != nullptr)
         {
