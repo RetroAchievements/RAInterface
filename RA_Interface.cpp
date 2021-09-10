@@ -416,7 +416,7 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
                                     break;
                                 }
 
-                                (*pBytesRead) += nBytesWritten;
+                                (*pBytesRead) += (DWORD)nBytesWritten;
                                 nBytesAvailable -= nBytesFetched;
                             }
                             else
