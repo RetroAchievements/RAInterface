@@ -864,7 +864,7 @@ static void RA_InitCommon(HWND hMainHWND, int nEmulatorID, const char* sClientNa
         return;
     }
 
-    int nMBReply = IDCONTINUE;
+    int nMBReply = 0;
     unsigned long long nVerInstalled = ParseVersion(sVerInstalled);
     if (nVerInstalled < nMinimumDLLVer)
     {
