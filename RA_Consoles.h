@@ -71,6 +71,10 @@ enum ConsoleID
     SharpX1 = 64,
     Tic80 = 65,
     ThomsonTO8 = 66,
+	PC6000 = 67,
+	Pico = 68,
+	MegaDuck = 69,
+	Zeebo = 70,
 
     NumConsoleIDs
 };
