@@ -75,6 +75,7 @@ enum ConsoleID
     Pico = 68,
     MegaDuck = 69,
     Zeebo = 70,
+    Arduboy = 71,
 
     NumConsoleIDs
 };
