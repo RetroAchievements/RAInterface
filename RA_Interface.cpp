@@ -20,6 +20,7 @@ static int          (CCONV* _RA_InitClientOffline)(HWND hMainWnd, const char* sC
 static void         (CCONV* _RA_InstallSharedFunctions)(int(*)(), void(*)(), void(*)(), void(*)(), void(*)(char*), void(*)(), void(*)(const char*)) = nullptr;
 static void         (CCONV* _RA_SetForceRepaint)(int bEnable) = nullptr;
 static HMENU        (CCONV* _RA_CreatePopupMenu)() = nullptr;
+static int          (CCONV* _RA_GetPopupMenuItems)(RA_MenuItem*) = nullptr;
 static void         (CCONV* _RA_InvokeDialog)(LPARAM nID) = nullptr;
 static void         (CCONV* _RA_SetUserAgentDetail)(const char* sDetail);
 static void         (CCONV* _RA_AttemptLogin)(int bBlocking) = nullptr;
@@ -137,6 +138,11 @@ void RA_InstallMemoryBank(int nBankID, RA_ReadMemoryFunc pReader, RA_WriteMemory
 HMENU RA_CreatePopupMenu(void)
 {
     return (_RA_CreatePopupMenu != nullptr) ? _RA_CreatePopupMenu() : nullptr;
+}
+
+int RA_GetPopupMenuItems(RA_MenuItem *pItems)
+{
+    return (_RA_GetPopupMenuItems != nullptr) ? _RA_GetPopupMenuItems(pItems) : 0;
 }
 
 void RA_UpdateAppTitle(const char* sCustomMsg)
@@ -655,6 +661,7 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_InstallSharedFunctions = (void(CCONV*)(int(*)(), void(*)(), void(*)(), void(*)(), void(*)(char*), void(*)(), void(*)(const char*))) GetProcAddress(g_hRADLL, "_RA_InstallSharedFunctionsExt");
     _RA_SetForceRepaint = (void(CCONV*)(int))                                        GetProcAddress(g_hRADLL, "_RA_SetForceRepaint");
     _RA_CreatePopupMenu = (HMENU(CCONV*)(void))                                      GetProcAddress(g_hRADLL, "_RA_CreatePopupMenu");
+    _RA_GetPopupMenuItems = (int(CCONV*)(RA_MenuItem*))                              GetProcAddress(g_hRADLL, "_RA_GetPopupMenuItems");
     _RA_InvokeDialog = (void(CCONV*)(LPARAM))                                        GetProcAddress(g_hRADLL, "_RA_InvokeDialog");
     _RA_SetUserAgentDetail = (void(CCONV*)(const char*))                             GetProcAddress(g_hRADLL, "_RA_SetUserAgentDetail");
     _RA_AttemptLogin = (void(CCONV*)(int))                                           GetProcAddress(g_hRADLL, "_RA_AttemptLogin");
@@ -978,6 +985,7 @@ void RA_Shutdown()
     _RA_InstallSharedFunctions = nullptr;
     _RA_SetForceRepaint = nullptr;
     _RA_CreatePopupMenu = nullptr;
+    _RA_GetPopupMenuItems = nullptr;
     _RA_InvokeDialog = nullptr;
     _RA_SetUserAgentDetail = nullptr;
     _RA_AttemptLogin = nullptr;

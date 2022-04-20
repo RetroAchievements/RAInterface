@@ -72,6 +72,21 @@ extern HMENU RA_CreatePopupMenu(void);
 #define IDM_RA_MENUSTART 1700
 #define IDM_RA_MENUEND 1739
 
+typedef struct RA_MenuItem
+{
+    LPCWSTR sLabel;
+    LPARAM nID;
+    int bChecked;
+} RA_MenuItem;
+
+/**
+ * Gets items for building a popup menu.
+ *
+ * @param pItems          Pre-allocated array to populate [should contain space for at least 32 items]
+ * @return                Number of items populated in the items array
+ */
+extern int RA_GetPopupMenuItems(RA_MenuItem *pItems);
+
 /**
  * Called when a menu item in the popup menu is selected.
  *
