@@ -299,6 +299,7 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
 {
     BOOL bResults = FALSE, bSuccess = FALSE;
     HINTERNET hSession = nullptr, hConnect = nullptr, hRequest = nullptr;
+    size_t nHostnameLen;
 
     WCHAR wBuffer[1024];
     size_t nTemp;
@@ -319,6 +320,17 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
         nPort = INTERNET_DEFAULT_HTTPS_PORT;
     }
 
+    const char* sPort = strchr(sHostName, ':');
+    if (sPort)
+    {
+        nHostnameLen = sPort - sHostName;
+        nPort = atoi(sPort + 1);
+    }
+    else
+    {
+        nHostnameLen = strlen(sHostName);
+    }
+
     // Use WinHttpOpen to obtain a session handle.
     hSession = WinHttpOpen(L"RetroAchievements Client Bootstrap",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
@@ -333,10 +345,11 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
     else
     {
 #if defined(_MSC_VER) && _MSC_VER >= 1400
-        mbstowcs_s(&nTemp, wBuffer, sizeof(wBuffer) / sizeof(wBuffer[0]), sHostName, strlen(sHostName) + 1);
+        mbstowcs_s(&nTemp, wBuffer, sizeof(wBuffer) / sizeof(wBuffer[0]), sHostName, nHostnameLen);
 #else
-        nTemp = mbstowcs(wBuffer, sHostName, strlen(sHostName) + 1);
+        nTemp = mbstowcs(wBuffer, sHostName, nHostnameLen);
 #endif
+
         if (nTemp > 0)
         {
             hConnect = WinHttpConnect(hSession, wBuffer, nPort, 0);
