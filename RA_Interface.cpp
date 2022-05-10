@@ -27,6 +27,7 @@ static void         (CCONV* _RA_AttemptLogin)(int bBlocking) = nullptr;
 static int          (CCONV* _RA_SetConsoleID)(unsigned int nConsoleID) = nullptr;
 static void         (CCONV* _RA_ClearMemoryBanks)() = nullptr;
 static void         (CCONV* _RA_InstallMemoryBank)(int nBankID, RA_ReadMemoryFunc* pReader, RA_WriteMemoryFunc* pWriter, int nBankSize) = nullptr;
+static void         (CCONV* _RA_InstallMemoryBankBlockReader)(int nBankID, RA_ReadMemoryBlockFunc* pReader) = nullptr;
 static int          (CCONV* _RA_Shutdown)() = nullptr;
 // Overlay
 static int          (CCONV* _RA_IsOverlayFullyVisible)() = nullptr;
@@ -133,6 +134,12 @@ void RA_InstallMemoryBank(int nBankID, RA_ReadMemoryFunc pReader, RA_WriteMemory
 {
     if (_RA_InstallMemoryBank != nullptr)
         _RA_InstallMemoryBank(nBankID, pReader, pWriter, nBankSize);
+}
+
+void RA_InstallMemoryBankBlockReader(int nBankID, RA_ReadMemoryBlockFunc pReader)
+{
+    if (_RA_InstallMemoryBankBlockReader != nullptr)
+        _RA_InstallMemoryBankBlockReader(nBankID, pReader);
 }
 
 HMENU RA_CreatePopupMenu(void)
@@ -668,6 +675,7 @@ static const char* CCONV _RA_InstallIntegration()
     _RA_SetConsoleID = (int(CCONV*)(unsigned int))                                   GetProcAddress(g_hRADLL, "_RA_SetConsoleID");
     _RA_ClearMemoryBanks = (void(CCONV*)())                                          GetProcAddress(g_hRADLL, "_RA_ClearMemoryBanks");
     _RA_InstallMemoryBank = (void(CCONV*)(int, RA_ReadMemoryFunc*, RA_WriteMemoryFunc*, int)) GetProcAddress(g_hRADLL, "_RA_InstallMemoryBank");
+    _RA_InstallMemoryBankBlockReader = (void(CCONV*)(int, RA_ReadMemoryBlockFunc*))  GetProcAddress(g_hRADLL, "_RA_InstallMemoryBankBlockReader");
     _RA_Shutdown = (int(CCONV*)())                                                   GetProcAddress(g_hRADLL, "_RA_Shutdown");
     _RA_IsOverlayFullyVisible = (int(CCONV*)())                                      GetProcAddress(g_hRADLL, "_RA_IsOverlayFullyVisible");
     _RA_SetPaused = (void(CCONV*)(int))                                              GetProcAddress(g_hRADLL, "_RA_SetPaused");
@@ -992,6 +1000,7 @@ void RA_Shutdown()
     _RA_SetConsoleID = nullptr;
     _RA_ClearMemoryBanks = nullptr;
     _RA_InstallMemoryBank = nullptr;
+    _RA_InstallMemoryBankBlockReader = nullptr;
     _RA_Shutdown = nullptr;
     _RA_IsOverlayFullyVisible = nullptr;
     _RA_SetPaused = nullptr;

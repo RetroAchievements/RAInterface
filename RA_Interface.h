@@ -142,6 +142,9 @@ typedef void (RA_WriteMemoryFunc)(unsigned int nAddress, unsigned char nValue);
  */
 extern void RA_InstallMemoryBank(int nBankID, RA_ReadMemoryFunc pReader, RA_WriteMemoryFunc pWriter, int nBankSize);
 
+typedef unsigned int (RA_ReadMemoryBlockFunc)(unsigned int nAddress, unsigned char* pBuffer, unsigned int nBytes);
+extern void RA_InstallMemoryBankBlockReader(int nBankID, RA_ReadMemoryBlockFunc pReader);
+
 /**
  * Deinitializes and unloads the DLL.
  */
