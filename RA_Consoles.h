@@ -80,6 +80,7 @@ enum ConsoleID
     Arcadia2001 = 73,
     IntertonVC4000 = 74,
     ElektorTVGamesComputer = 75,
+    PCEngineCD = 76,
 
     NumConsoleIDs
 };
