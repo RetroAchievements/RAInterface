@@ -77,6 +77,9 @@ enum ConsoleID
     Zeebo = 70,
     Arduboy = 71,
     WASM4 = 72,
+    Arcadia2001 = 73,
+    IntertonVC4000 = 74,
+    ElektorTVGamesComputer = 75,
 
     NumConsoleIDs
 };
