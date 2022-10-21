@@ -81,6 +81,7 @@ enum ConsoleID
     IntertonVC4000 = 74,
     ElektorTVGamesComputer = 75,
     PCEngineCD = 76,
+    JaguarCD = 77,
 
     NumConsoleIDs
 };
