@@ -15,6 +15,7 @@ enum EmulatorID
     RA_QUASI88 = 9,
     RA_AppleWin = 10,
     RA_Oricutron = 11,
+    BizHawk = 12,
 
     NumEmulatorIDs,
     UnknownEmulator = NumEmulatorIDs
