@@ -82,6 +82,7 @@ enum ConsoleID
     ElektorTVGamesComputer = 75,
     PCEngineCD = 76,
     JaguarCD = 77,
+    DSi = 78,
 
     NumConsoleIDs
 };
