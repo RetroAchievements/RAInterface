@@ -83,6 +83,8 @@ enum ConsoleID
     PCEngineCD = 76,
     JaguarCD = 77,
     DSi = 78,
+    TI83 = 79,
+    Uzebox = 80,
 
     NumConsoleIDs
 };
