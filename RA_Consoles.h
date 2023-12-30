@@ -1,7 +1,7 @@
 #ifndef RA_CONSOLES_H
 #define RA_CONSOLES_H
 
-/* this list should match the list in rcheevos/include/rconsoles.h */
+/* this list should match the list in rcheevos/include/rc_consoles.h */
 enum ConsoleID
 {
     UnknownConsoleID = 0,
@@ -85,6 +85,10 @@ enum ConsoleID
     DSi = 78,
     TI83 = 79,
     Uzebox = 80,
+
+    Hubs = 100,
+    Events = 101,
+    Standalones = 102,
 
     NumConsoleIDs
 };
