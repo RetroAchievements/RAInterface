@@ -88,7 +88,7 @@ enum ConsoleID
 
     Hubs = 100,
     Events = 101,
-    Standalones = 102,
+    Standalone = 102,
 
     NumConsoleIDs
 };
