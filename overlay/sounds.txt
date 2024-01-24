@@ -1,0 +1,7 @@
+acherror - smb3 crushing dry bones
+info - smb3 stomp
+lb - smb3 kicking koopa shell
+lbcancel - smb3 bonus game: no match
+login - smb3 power up
+rareunlock - sm64 enter level
+unlock - xbox 360 achievement unlocked
