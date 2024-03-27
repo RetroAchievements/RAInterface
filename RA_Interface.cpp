@@ -355,6 +355,8 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
         mbstowcs_s(&nTemp, wBuffer, sizeof(wBuffer) / sizeof(wBuffer[0]), sHostName, nHostnameLen);
 #else
         nTemp = mbstowcs(wBuffer, sHostName, nHostnameLen);
+        if (nTemp > 0)
+            wBuffer[nTemp] = '\0';
 #endif
 
         if (nTemp > 0)
@@ -373,6 +375,8 @@ static BOOL DoBlockingHttpCall(const char* sHostUrl, const char* sRequestedPage,
             mbstowcs_s(&nTemp, wBuffer, sizeof(wBuffer) / sizeof(wBuffer[0]), sRequestedPage, strlen(sRequestedPage) + 1);
 #else
             nTemp = mbstowcs(wBuffer, sRequestedPage, strlen(sRequestedPage) + 1);
+            if (nTemp > 0)
+                wBuffer[nTemp] = '\0';
 #endif
 
             hRequest = WinHttpOpenRequest(hConnect,
