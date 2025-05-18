@@ -85,6 +85,7 @@ enum ConsoleID
     DSi = 78,
     TI83 = 79,
     Uzebox = 80,
+    FamicomDiskSystem = 81,
 
     Hubs = 100,
     Events = 101,
