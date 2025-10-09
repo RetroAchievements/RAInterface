@@ -55,20 +55,40 @@ if "%ACTIVE_BRANCH:~0,5%" == "alpha" (
     set /A "PRERELEASE_VERSION_MINOR=%VERSION_MINOR%+1"
 )
 
+rem === If there are any local modifications, set branch name to "dirty" ===
+git diff HEAD > Temp.txt
+for /F "usebackq" %%A in ('"Temp.txt"') do set DIFF_FILE_SIZE=%%~zA
+if %DIFF_FILE_SIZE% GTR 0 (
+    set BRANCH_INFO=%BRANCH_INFO% [modified]
+    if "%ACTIVE_BRANCH%" == "master" (
+        set ACTIVE_BRANCH=dirty
+    )
+)
+
+rem === If we're on master and there any local commits, set branch name to "dirty" ===
+if "%ACTIVE_BRANCH%" == "master" (
+    rem === Get the upstream branch ===
+    setlocal enabledelayedexpansion
+    set UPSTREAM_BRANCH=origin/master
+    for /f "tokens=* USEBACKQ" %%a IN (`git rev-parse --abbrev-ref @{upstream}`) do set UPSTREAM_BRANCH=%%a
+
+    rem === Determine how many local commits exist ===
+    set AHEAD_COUNT=0
+    for /f "tokens=* USEBACKQ" %%a in (`git rev-list --count !UPSTREAM_BRANCH!..%ACTIVE_BRANCH%`) do set AHEAD_COUNT=%%a
+    if not "!AHEAD_COUNT!" == "0" (
+        set /A VERSION_REVISION=%VERSION_REVISION%-!AHEAD_COUNT!
+        set ACTIVE_BRANCH=dirty
+    )   
+    setlocal
+)
+
+rem === If not on a clean master branch, capture the branch name/dirty state ===
 if not "%ACTIVE_BRANCH%" == "master" (
     if not "%PRERELEASE_VERSION_MINOR%" == "" (
         set VERSION_PRODUCT=%VERSION_MAJOR%.%PRERELEASE_VERSION_MINOR%-%ACTIVE_BRANCH%
     ) else if not "%ACTIVE_BRANCH:~-6%" == "-fixes" (
         set VERSION_PRODUCT=%VERSION_PRODUCT%-%ACTIVE_BRANCH%
     )
-)
-
-rem === If there are any local modifications, increment revision ===
-git diff HEAD > Temp.txt
-for /F "usebackq" %%A in ('"Temp.txt"') do set DIFF_FILE_SIZE=%%~zA
-if %DIFF_FILE_SIZE% GTR 0 (
-    set BRANCH_INFO=%BRANCH_INFO% [modified]
-    set /A VERSION_REVISION=VERSION_REVISION+1
 )
 
 rem === Generate a new version file ===
