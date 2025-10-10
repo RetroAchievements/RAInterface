@@ -56,6 +56,9 @@ set VERSION_REVISION=0
 
 set BRANCH_INFO=%ACTIVE_BRANCH%
 
+rem === Treat develop branch like master branch for dirty detection ===
+if "%ACTIVE_BRANCH%" == "develop" set ACTIVE_BRANCH=master
+
 rem === Build the product version. If on a branch, include the branch name ===
 set VERSION_PRODUCT=%VERSION_TAG%
 
