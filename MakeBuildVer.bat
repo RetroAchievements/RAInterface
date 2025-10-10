@@ -20,6 +20,10 @@ rem === Get the current branch ===
 git rev-parse --abbrev-ref HEAD > Temp.txt
 set /p ACTIVE_BRANCH=<Temp.txt
 
+rem === Get the current commit hash ===
+git rev-parse HEAD > Temp.txt
+set /p FULLHASH=<Temp.txt
+
 rem === Get the most recent tag matching our prefix ===
 git describe --tags --match "%GIT_TAG%.*" > Temp.txt 2>&1
 set /p ACTIVE_TAG=<Temp.txt
@@ -101,6 +105,8 @@ echo #define %DEFINE_PREFIX%_VERSION_MINOR %VERSION_MINOR% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_PATCH %VERSION_PATCH% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_REVISION %VERSION_REVISION% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_PRODUCT "%VERSION_PRODUCT%" >> Temp.txt
+echo #define %DEFINE_PREFIX%_VERSION_COMMIT_HASH "%FULLHASH%" >> Temp.txt
+echo #define %DEFINE_PREFIX%_VERSION_COMMIT_HASH_SHORT "%FULLHASH:~0,8%" >> Temp.txt
 
 rem === Update the existing file only if the new file differs (fc requires backslashes) ===
 set TARGET_FILE=%TARGET_FILE:/=\%
