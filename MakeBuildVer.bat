@@ -101,6 +101,10 @@ if not "%ACTIVE_BRANCH%" == "master" (
     )
 )
 
+set VERSION_FULL=%VERSION_TAG%
+if not "%VERSION_REVISION%" == "0" set VERSION_FULL=%VERSION_FULL%.%VERSION_REVISION%
+if not "%ACTIVE_BRANCH%" == "master" set VERSION_FULL=%VERSION_FULL%-%ACTIVE_BRANCH%
+
 rem === Generate a new version file ===
 @echo Branch: %BRANCH_INFO% (%VERSION_TAG%)
 
@@ -111,6 +115,7 @@ echo #define %DEFINE_PREFIX%_VERSION_MINOR %VERSION_MINOR% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_PATCH %VERSION_PATCH% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_REVISION %VERSION_REVISION% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_PRODUCT "%VERSION_PRODUCT%" >> Temp.txt
+echo #define %DEFINE_PREFIX%_VERSION_FULL "%VERSION_FULL%" >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_COMMIT_HASH "%FULLHASH%" >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_COMMIT_HASH_SHORT "%FULLHASH:~0,8%" >> Temp.txt
 
