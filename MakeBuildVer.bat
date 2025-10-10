@@ -25,9 +25,15 @@ git rev-parse HEAD > Temp.txt
 set /p FULLHASH=<Temp.txt
 
 rem === Get the most recent tag matching our prefix ===
-git describe --tags --match "%GIT_TAG%.*" > Temp.txt 2>&1
+if "%GIT_TAG%" == """" (
+    git describe --tags > Temp.txt 2>&1
+) else (
+    git describe --tags --match "%GIT_TAG%.*" > Temp.txt 2>&1
+)
 set /p ACTIVE_TAG=<Temp.txt
 if "%ACTIVE_TAG:~0,5%" == "fatal" goto no_tag
+
+if "%GIT_TAG%" == """" set ACTIVE_TAG=X.%ACTIVE_TAG%
 
 rem === Get the number of commits since the tag and remove the hash PREFIX-COMMITS-HASH ===
 for /f "tokens=1,2 delims=-" %%a in ("%ACTIVE_TAG%") do set ACTIVE_TAG=%%a&set VERSION_REVISION=%%b
