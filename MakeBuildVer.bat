@@ -105,7 +105,12 @@ if not "%ACTIVE_BRANCH%" == "master" (
 )
 
 set VERSION_FULL=%VERSION_TAG%
-if not "%VERSION_REVISION%" == "0" set VERSION_FULL=%VERSION_FULL%.%VERSION_REVISION%
+if not "%VERSION_REVISION%" == "0" (
+    setlocal enabledelayedexpansion
+    if "%VERSION_PATCH%" == "0" set VERSION_FULL=%VERSION_FULL%.0
+    set VERSION_FULL=!VERSION_FULL!.%VERSION_REVISION%
+    setlocal
+)
 if not "%ACTIVE_BRANCH%" == "master" set VERSION_FULL=%VERSION_FULL%-%ACTIVE_BRANCH%
 
 rem === Generate a new version file ===

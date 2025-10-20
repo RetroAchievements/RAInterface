@@ -95,6 +95,9 @@ fi
 
 VERSION_FULL=$VERSION_TAG
 if [[ "$VERSION_REVISION" != "0" ]]; then
+    if [[ "$VERSION_PATCH" == "0" ]]; then
+        VERSION_FULL=$VERSION_FULL.0
+    fi
     VERSION_FULL=$VERSION_FULL.$VERSION_REVISION
 fi
 if [[ "$ACTIVE_BRANCH" != "master" ]]; then
