@@ -9,6 +9,13 @@
 #define CCONV __cdecl
 #endif
 
+#if defined(_M_X64) || defined(__amd64__)
+ #define RA_X64
+ #define RA_INT_DLL L"RA_Integration-x64.dll"
+#else
+ #define RA_INT_DLL L"RA_Integration.dll"
+#endif
+
 // Initialization
 static const char*  (CCONV* _RA_IntegrationVersion)() = nullptr;
 static const char*  (CCONV* _RA_HostName)() = nullptr;
@@ -538,7 +545,7 @@ static BOOL DoBlockingHttpCallWithRetry(const char* sHostUrl, const char* sReque
 }
 
 #ifndef RA_UTEST
-static std::wstring GetIntegrationPath()
+static std::wstring GetIntegrationPath(const wchar_t* sFilename)
 {
     wchar_t sBuffer[2048];
     DWORD iIndex = GetModuleFileNameW(0, sBuffer, 2048);
@@ -546,9 +553,9 @@ static std::wstring GetIntegrationPath()
         --iIndex;
 
 #if defined(_MSC_VER) && _MSC_VER >= 1400
-    wcscpy_s(&sBuffer[iIndex], sizeof(sBuffer)/sizeof(sBuffer[0]) - iIndex, L"RA_Integration.dll");
+    wcscpy_s(&sBuffer[iIndex], sizeof(sBuffer)/sizeof(sBuffer[0]) - iIndex, sFilename);
 #else
-    wcscpy(&sBuffer[iIndex], L"RA_Integration.dll");
+    wcscpy(&sBuffer[iIndex], sFilename);
 #endif
 
     return std::wstring(sBuffer);
@@ -558,9 +565,14 @@ static std::wstring GetIntegrationPath()
 static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
 {
     DWORD nBytesRead = 0;
-    const wchar_t* sDownloadFilename = L"RA_Integration.download";
-    const wchar_t* sFilename = L"RA_Integration.dll";
-    const wchar_t* sOldFilename = L"RA_Integration.old";
+    const wchar_t* sDownloadFilename = RA_INT_DLL ".download";
+    const wchar_t* sFilename = RA_INT_DLL;
+    const wchar_t* sOldFilename = RA_INT_DLL ".old";
+
+#ifdef RA_X64
+    if (GetFileAttributesW(sFilename) == INVALID_FILE_ATTRIBUTES)
+      sFilename = L"RA_Integration.dll";
+#endif
 
 #if defined(_MSC_VER) && _MSC_VER >= 1400
     FILE* pf;
@@ -575,9 +587,9 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
         wchar_t sErrBuffer[2048];
         _wcserror_s(sErrBuffer, sizeof(sErrBuffer) / sizeof(sErrBuffer[0]), nErr);
 
-        std::wstring sErrMsg = std::wstring(L"Unable to write ") + sOldFilename + L"\n" + sErrBuffer;
+        std::wstring sErrMsg = std::wstring(L"Unable to write ") + sDownloadFilename + L"\n" + sErrBuffer;
 #else
-        std::wstring sErrMsg = std::wstring(L"Unable to write ") + sOldFilename + L"\n" + _wcserror(errno);
+        std::wstring sErrMsg = std::wstring(L"Unable to write ") + sDownloadFilename + L"\n" + _wcserror(errno);
 #endif
 
         MessageBoxW(nullptr, sErrMsg.c_str(), L"Error", MB_OK | MB_ICONERROR);
@@ -619,7 +631,7 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
             MessageBoxW(nullptr, L"Could not rename old dll", L"Error", MB_OK | MB_ICONERROR);
         }
         // rename the download to be the dll
-        else if (!MoveFileW(sDownloadFilename, sFilename))
+        else if (!MoveFileW(sDownloadFilename, RA_INT_DLL))
         {
             MessageBoxW(nullptr, L"Could not rename new dll", L"Error", MB_OK | MB_ICONERROR);
         }
@@ -657,9 +669,15 @@ static const char* CCONV _RA_InstallIntegration()
 {
     SetErrorMode(0);
 
-    std::wstring sIntegrationPath = GetIntegrationPath();
+    std::wstring sIntegrationPath = GetIntegrationPath(RA_INT_DLL);
 
     DWORD dwAttrib = GetFileAttributesW(sIntegrationPath.c_str());
+#ifdef RA_X64
+    if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
+        sIntegrationPath = GetIntegrationPath(L"RA_Integration.dll");
+        dwAttrib = GetFileAttributesW(sIntegrationPath.c_str());
+    }
+#endif
     if (dwAttrib == INVALID_FILE_ATTRIBUTES)
         return "0.0";
 
@@ -667,7 +685,23 @@ static const char* CCONV _RA_InstallIntegration()
     if (g_hRADLL == nullptr)
     {
         char buffer[1024];
-        sprintf_s(buffer, 1024, "Could not load RA_Integration.dll: %d\n%s\n", ::GetLastError(), GetLastErrorAsString().c_str());
+        if (::GetLastError() == ERROR_BAD_EXE_FORMAT)
+        {
+#ifdef RA_X64
+          sprintf_s(buffer, sizeof(buffer), "Could not load RA_Integration-x64.dll (error %d)\nAre you trying to load the 32-bit version?\n", ::GetLastError());
+#else
+          sprintf_s(buffer, sizeof(buffer), "Could not load RA_Integration.dll (error %d)\nAre you trying to load the 64-bit version?\n", ::GetLastError());
+#endif
+        }
+        else
+        {
+#ifdef RA_X64
+            sprintf_s(buffer, sizeof(buffer), "Could not load RA_Integration-x64.dll (error %d)\n%s\n", ::GetLastError(), GetLastErrorAsString().c_str());
+#else
+            sprintf_s(buffer, sizeof(buffer), "Could not load RA_Integration.dll (error %d)\n%s\n", ::GetLastError(), GetLastErrorAsString().c_str());
+#endif
+        }
+
         MessageBoxA(nullptr, buffer, "Warning", MB_OK | MB_ICONWARNING);
 
         return "0.0";
@@ -876,7 +910,7 @@ static void RA_InitCommon(HWND hMainHWND, int nEmulatorID, const char* sClientNa
     GetJsonField(buffer, "LatestVersion", sVersionBuffer, sizeof(sVersionBuffer));
     const unsigned long long nLatestDLLVer = ParseVersion(sVersionBuffer);
 
-#if defined(_M_X64) || defined(__amd64__)
+#ifdef RA_X64
     GetJsonField(buffer, "LatestVersionUrlX64", sLatestVersionUrl, sizeof(sLatestVersionUrl));
 #else
     GetJsonField(buffer, "LatestVersionUrl", sLatestVersionUrl, sizeof(sLatestVersionUrl));

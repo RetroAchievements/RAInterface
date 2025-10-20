@@ -20,10 +20,20 @@ rem === Get the current branch ===
 git rev-parse --abbrev-ref HEAD > Temp.txt
 set /p ACTIVE_BRANCH=<Temp.txt
 
+rem === Get the current commit hash ===
+git rev-parse HEAD > Temp.txt
+set /p FULLHASH=<Temp.txt
+
 rem === Get the most recent tag matching our prefix ===
-git describe --tags --match "%GIT_TAG%.*" > Temp.txt 2>&1
+if "%GIT_TAG%" == """" (
+    git describe --tags > Temp.txt 2>&1
+) else (
+    git describe --tags --match "%GIT_TAG%.*" > Temp.txt 2>&1
+)
 set /p ACTIVE_TAG=<Temp.txt
 if "%ACTIVE_TAG:~0,5%" == "fatal" goto no_tag
+
+if "%GIT_TAG%" == """" set ACTIVE_TAG=X.%ACTIVE_TAG%
 
 rem === Get the number of commits since the tag and remove the hash PREFIX-COMMITS-HASH ===
 for /f "tokens=1,2 delims=-" %%a in ("%ACTIVE_TAG%") do set ACTIVE_TAG=%%a&set VERSION_REVISION=%%b
@@ -46,6 +56,9 @@ set VERSION_REVISION=0
 
 set BRANCH_INFO=%ACTIVE_BRANCH%
 
+rem === Treat develop branch like master branch for dirty detection ===
+if "%ACTIVE_BRANCH%" == "develop" set ACTIVE_BRANCH=master
+
 rem === Build the product version. If on a branch, include the branch name ===
 set VERSION_PRODUCT=%VERSION_TAG%
 
@@ -55,6 +68,34 @@ if "%ACTIVE_BRANCH:~0,5%" == "alpha" (
     set /A "PRERELEASE_VERSION_MINOR=%VERSION_MINOR%+1"
 )
 
+rem === If there are any local modifications, set branch name to "dirty" ===
+git diff HEAD > Temp.txt
+for /F "usebackq" %%A in ('"Temp.txt"') do set DIFF_FILE_SIZE=%%~zA
+if %DIFF_FILE_SIZE% GTR 0 (
+    set BRANCH_INFO=%BRANCH_INFO% [modified]
+    if "%ACTIVE_BRANCH%" == "master" (
+        set ACTIVE_BRANCH=dirty
+    )
+)
+
+rem === If we're on master and there any local commits, set branch name to "dirty" ===
+if "%ACTIVE_BRANCH%" == "master" (
+    rem === Get the upstream branch ===
+    setlocal enabledelayedexpansion
+    set UPSTREAM_BRANCH=origin/master
+    for /f "tokens=* USEBACKQ" %%a IN (`git rev-parse --abbrev-ref @{upstream}`) do set UPSTREAM_BRANCH=%%a
+
+    rem === Determine how many local commits exist ===
+    set AHEAD_COUNT=0
+    for /f "tokens=* USEBACKQ" %%a in (`git rev-list --count !UPSTREAM_BRANCH!..%ACTIVE_BRANCH%`) do set AHEAD_COUNT=%%a
+    if not "!AHEAD_COUNT!" == "0" (
+        set /A VERSION_REVISION=%VERSION_REVISION%-!AHEAD_COUNT!
+        set ACTIVE_BRANCH=dirty
+    )   
+    setlocal
+)
+
+rem === If not on a clean master branch, capture the branch name/dirty state ===
 if not "%ACTIVE_BRANCH%" == "master" (
     if not "%PRERELEASE_VERSION_MINOR%" == "" (
         set VERSION_PRODUCT=%VERSION_MAJOR%.%PRERELEASE_VERSION_MINOR%-%ACTIVE_BRANCH%
@@ -63,13 +104,9 @@ if not "%ACTIVE_BRANCH%" == "master" (
     )
 )
 
-rem === If there are any local modifications, increment revision ===
-git diff HEAD > Temp.txt
-for /F "usebackq" %%A in ('"Temp.txt"') do set DIFF_FILE_SIZE=%%~zA
-if %DIFF_FILE_SIZE% GTR 0 (
-    set BRANCH_INFO=%BRANCH_INFO% [modified]
-    set /A VERSION_REVISION=VERSION_REVISION+1
-)
+set VERSION_FULL=%VERSION_TAG%
+if not "%VERSION_REVISION%" == "0" set VERSION_FULL=%VERSION_FULL%.%VERSION_REVISION%
+if not "%ACTIVE_BRANCH%" == "master" set VERSION_FULL=%VERSION_FULL%-%ACTIVE_BRANCH%
 
 rem === Generate a new version file ===
 @echo Branch: %BRANCH_INFO% (%VERSION_TAG%)
@@ -81,6 +118,9 @@ echo #define %DEFINE_PREFIX%_VERSION_MINOR %VERSION_MINOR% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_PATCH %VERSION_PATCH% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_REVISION %VERSION_REVISION% >> Temp.txt
 echo #define %DEFINE_PREFIX%_VERSION_PRODUCT "%VERSION_PRODUCT%" >> Temp.txt
+echo #define %DEFINE_PREFIX%_VERSION_FULL "%VERSION_FULL%" >> Temp.txt
+echo #define %DEFINE_PREFIX%_VERSION_COMMIT_HASH "%FULLHASH%" >> Temp.txt
+echo #define %DEFINE_PREFIX%_VERSION_COMMIT_HASH_SHORT "%FULLHASH:~0,8%" >> Temp.txt
 
 rem === Update the existing file only if the new file differs (fc requires backslashes) ===
 set TARGET_FILE=%TARGET_FILE:/=\%
