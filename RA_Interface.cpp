@@ -297,12 +297,12 @@ static void FormatByteSize(DWORD nSize, wchar_t* sBuffer, size_t nBufferSize)
     fSize /= 1024.0;
     if (fSize < 1024.0)
     {
-        swprintf_s(sBuffer, nBufferSize, L"%.2fKB", fSize);
+        swprintf_s(sBuffer, nBufferSize, L"%.2f KB", fSize);
         return;
     }
 
     fSize /= 1024.0;
-    swprintf_s(sBuffer, nBufferSize, L"%.2fMB", fSize);
+    swprintf_s(sBuffer, nBufferSize, L"%.2f MB", fSize);
 }
 
 static void SetProgressMessage(IProgressDialog* pProgressDialog, DWORD nProgress, DWORD nMax)
@@ -679,20 +679,21 @@ static std::wstring GetIntegrationPath(const wchar_t* sFilename)
 static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
 {
     DWORD nBytesRead = 0;
-    const wchar_t* sDownloadFilename = RA_INT_DLL ".download";
-    const wchar_t* sFilename = RA_INT_DLL;
-    const wchar_t* sOldFilename = RA_INT_DLL ".old";
+    const std::wstring sDownloadFilename = GetIntegrationPath(RA_INT_DLL ".download");
+    const std::wstring sOldFilename = GetIntegrationPath(RA_INT_DLL ".old");
+    const std::wstring sNewFilename = GetIntegrationPath(RA_INT_DLL);
+    std::wstring sFilename = sNewFilename;
 
 #ifdef RA_X64
-    if (GetFileAttributesW(sFilename) == INVALID_FILE_ATTRIBUTES)
-        sFilename = L"RA_Integration.dll";
+    if (GetFileAttributesW(sFilename.c_str()) == INVALID_FILE_ATTRIBUTES)
+        sFilename = GetIntegrationPath(L"RA_Integration.dll");
 #endif
 
 #if defined(_MSC_VER) && _MSC_VER >= 1400
     FILE* pf;
-    errno_t nErr = _wfopen_s(&pf, sDownloadFilename, L"wb");
+    errno_t nErr = _wfopen_s(&pf, sDownloadFilename.c_str(), L"wb");
 #else
-    FILE* pf = _wfopen(sDownloadFilename, L"wb");
+    FILE* pf = _wfopen(sDownloadFilename.c_str(), L"wb");
 #endif
 
     if (!pf)
@@ -701,9 +702,9 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
         wchar_t sErrBuffer[2048];
         _wcserror_s(sErrBuffer, sizeof(sErrBuffer) / sizeof(sErrBuffer[0]), nErr);
 
-        std::wstring sErrMsg = std::wstring(L"Unable to write ") + sDownloadFilename + L"\n" + sErrBuffer;
+        std::wstring sErrMsg = std::wstring(L"Unable to write " RA_INT_DLL L".download\n") + sErrBuffer;
 #else
-        std::wstring sErrMsg = std::wstring(L"Unable to write ") + sDownloadFilename + L"\n" + _wcserror(errno);
+        std::wstring sErrMsg = std::wstring(L"Unable to write " RA_INT_DLL L".download\n" + _wcserror(errno);
 #endif
 
         MessageBoxW(nullptr, sErrMsg.c_str(), L"Error", MB_OK | MB_ICONERROR);
@@ -730,29 +731,29 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
         /* wait up to one second for the DLL to actually be released - sometimes it's not immediate */
         for (int i = 0; i < 10; i++)
         {
-            if (GetModuleHandleW(sFilename) == nullptr)
+            if (GetModuleHandleW(sFilename.c_str()) == nullptr)
                 break;
 
             Sleep(100);
         }
 
         // delete the last old dll if it's still present
-        DeleteFileW(sOldFilename);
+        DeleteFileW(sOldFilename.c_str());
 
         // if there's a dll present, rename it
-        if (GetFileAttributesW(sFilename) != INVALID_FILE_ATTRIBUTES &&
-            !MoveFileW(sFilename, sOldFilename))
+        if (GetFileAttributesW(sFilename.c_str()) != INVALID_FILE_ATTRIBUTES &&
+            !MoveFileW(sFilename.c_str(), sOldFilename.c_str()))
         {
             MessageBoxW(nullptr, L"Could not rename old dll", L"Error", MB_OK | MB_ICONERROR);
         }
         // rename the download to be the dll
-        else if (!MoveFileW(sDownloadFilename, RA_INT_DLL))
+        else if (!MoveFileW(sDownloadFilename.c_str(), sNewFilename.c_str()))
         {
             MessageBoxW(nullptr, L"Could not rename new dll", L"Error", MB_OK | MB_ICONERROR);
         }
 
         // delete the old dll
-        DeleteFileW(sOldFilename);
+        DeleteFileW(sOldFilename.c_str());
     }
     else
     {
