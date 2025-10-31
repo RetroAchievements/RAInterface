@@ -704,7 +704,7 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
 
         std::wstring sErrMsg = std::wstring(L"Unable to write " RA_INT_DLL L".download\n") + sErrBuffer;
 #else
-        std::wstring sErrMsg = std::wstring(L"Unable to write " RA_INT_DLL L".download\n" + _wcserror(errno);
+        std::wstring sErrMsg = std::wstring(L"Unable to write " RA_INT_DLL L".download\n") + _wcserror(errno);
 #endif
 
         MessageBoxW(nullptr, sErrMsg.c_str(), L"Error", MB_OK | MB_ICONERROR);
