@@ -11,6 +11,15 @@
  #define IProgressDialog void
 #endif
 
+#ifndef RA_NOTASKDIALOG
+ // This allows our UI to use visual styles introduced in ComCtl32 v6, even if the
+ // emulator does not enable them.
+ // see https://docs.microsoft.com/en-us/windows/desktop/controls/cookbook-overview
+ #pragma comment(linker,"\"/manifestdependency:type='win32' \
+   name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+   processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#endif
+
 #ifndef CCONV
 #define CCONV __cdecl
 #endif
@@ -68,6 +77,51 @@ static int          (CCONV* _RA_CaptureState)(char* pBuffer, int nBufferSize) = 
 static void         (CCONV* _RA_RestoreState)(const char* pBuffer) = nullptr;
 
 static HINSTANCE g_hRADLL = nullptr;
+
+static int ShowMessage(HWND hMainHWND, std::wstring sHeader, std::wstring sMessage, int nFlags)
+{
+#ifndef RA_NOTASKDIALOG
+    // fetch the function pointer as the dll may not have been linked directly in the emulator
+    using fnTaskDialog = std::add_pointer_t<HRESULT
+        WINAPI(HWND, HINSTANCE, PCWSTR, PCWSTR, PCWSTR, TASKDIALOG_COMMON_BUTTON_FLAGS, PCWSTR, int*)>;
+
+    auto hDll = LoadLibraryW(L"comctl32.dll");
+    if (hDll)
+    {
+        FARPROC proc = GetProcAddress(hDll, "TaskDialog");
+        fnTaskDialog pTaskDialog = reinterpret_cast<fnTaskDialog>(proc);
+        if (pTaskDialog != nullptr)
+        {
+            const LPWSTR sIcon = (nFlags & MB_ICONWARNING) ? TD_WARNING_ICON : TD_ERROR_ICON;
+            const int nButtons = (nFlags & MB_YESNO) ? TDCBF_YES_BUTTON | TDCBF_NO_BUTTON : TDCBF_OK_BUTTON;
+            int nSelection;
+            const int nResult = pTaskDialog(hMainHWND, nullptr, nullptr,
+                                            sHeader.c_str(), sMessage.c_str(),
+                                            nButtons, sIcon, &nSelection);
+            if (SUCCEEDED(nResult))
+                return nSelection; // TaskDialog results match MessageBox results
+        }
+    }
+#endif
+
+    std::wstring sCombined = sHeader + L"\n\n" + sMessage;
+    return MessageBoxW(hMainHWND, sCombined.c_str(), NULL, nFlags);
+}
+
+static void ShowErrorMessage(HWND hMainHWND, std::wstring sHeader, std::wstring sMessage)
+{
+    ShowMessage(hMainHWND, sHeader, sMessage, MB_OK | MB_ICONERROR);
+}
+
+static void ShowWarningMessage(HWND hMainHWND, std::wstring sHeader, std::wstring sMessage)
+{
+    ShowMessage(hMainHWND, sHeader, sMessage, MB_OK | MB_ICONWARNING);
+}
+
+static int ShowYesNoWarningMessage(HWND hMainHWND, std::wstring sHeader, std::wstring sMessage)
+{
+    return ShowMessage(hMainHWND, sHeader, sMessage, MB_YESNO | MB_ICONWARNING);
+}
 
 void RA_AttemptLogin(int bBlocking)
 {
@@ -270,9 +324,9 @@ int RA_WarnDisableHardcore(const char* sActivity)
         return _RA_WarnDisableHardcore(sActivity);
 
     // We cannot disable hardcore mode, so just warn the user and prevent the activity.
-    std::string sMessage;
-    sMessage = "You cannot " + std::string(sActivity) + " while Hardcore mode is active.";
-    MessageBoxA(nullptr, sMessage.c_str(), "Warning", MB_OK | MB_ICONWARNING);
+    std::wstring sMessage;
+    sMessage = L"You cannot " + std::wstring(sActivity, sActivity + strlen(sActivity)) + L" while Hardcore mode is active.";
+    ShowWarningMessage(nullptr, L"Hardcore restriction", sMessage);
     return 0;
 }
 
@@ -328,9 +382,10 @@ static size_t DownloadToFile(char* pData, size_t nDataSize, void* pUserData, DWO
     size_t nBytesWritten = fwrite(pData, 1, nDataSize, file);
     if (nBytesWritten != nDataSize)
     {
-        std::string sMessage;
-        sMessage = "Error " + std::to_string(errno) + " writing file: " + strerror(errno);
-        MessageBoxA(nullptr, sMessage.c_str(), "Error", MB_OK | MB_ICONERROR);
+        wchar_t message[256];
+        swprintf_s(message, sizeof(message) / sizeof(message[0]),
+            L"Error %u writing file: %hs", errno, strerror(errno));
+        ShowErrorMessage(nullptr, L"Download failed", message);
         *pStatusCode = 0;
     }
 
@@ -707,7 +762,7 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
         std::wstring sErrMsg = std::wstring(L"Unable to write " RA_INT_DLL L".download\n") + _wcserror(errno);
 #endif
 
-        MessageBoxW(nullptr, sErrMsg.c_str(), L"Error", MB_OK | MB_ICONERROR);
+        ShowErrorMessage(nullptr, L"Download failed", sErrMsg);
         *pStatusCode = 0;
         return;
     }
@@ -717,7 +772,7 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
     {
         if (!*pSplit)
         {
-            *pStatusCode = 997;
+            *pStatusCode = ERROR_WINHTTP_INVALID_URL;
             return;
         }
         ++pSplit;
@@ -744,12 +799,12 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
         if (GetFileAttributesW(sFilename.c_str()) != INVALID_FILE_ATTRIBUTES &&
             !MoveFileW(sFilename.c_str(), sOldFilename.c_str()))
         {
-            MessageBoxW(nullptr, L"Could not rename old dll", L"Error", MB_OK | MB_ICONERROR);
+            ShowErrorMessage(nullptr, L"Update failed", L"Could not rename old dll.");
         }
         // rename the download to be the dll
         else if (!MoveFileW(sDownloadFilename.c_str(), sNewFilename.c_str()))
         {
-            MessageBoxW(nullptr, L"Could not rename new dll", L"Error", MB_OK | MB_ICONERROR);
+            ShowErrorMessage(nullptr, L"Update failed", L"Could not rename new dll.");
         }
 
         // delete the old dll
@@ -761,24 +816,77 @@ static void FetchIntegrationFromWeb(char* sLatestVersionUrl, DWORD* pStatusCode)
     }
 }
 
-//Returns the last Win32 error, in string format. Returns an empty string if there is no error.
-static std::string GetLastErrorAsString()
+static std::wstring GetLastErrorString(DWORD nError)
 {
-    //Get the error message, if any.
-    DWORD errorMessageID = ::GetLastError();
-    if (errorMessageID == 0)
-        return "No error message has been recorded";
+    LPWSTR messageBuffer = nullptr;
+    size_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr, nError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, nullptr);
 
-    LPSTR messageBuffer = nullptr;
-    size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, nullptr);
+    std::wstring message(messageBuffer, size);
 
-    std::string message(messageBuffer, size);
-
-    //Free the buffer.
     LocalFree(messageBuffer);
-
     return message;
+}
+
+static std::wstring GetStatusCodeText(unsigned int nStatusCode)
+{
+    wchar_t szMessageBuffer[256] = L"";
+    const wchar_t* pMessage = NULL;
+    std::wstring sMessage;
+
+    if (nStatusCode >= WINHTTP_ERROR_BASE && nStatusCode <= WINHTTP_ERROR_LAST)
+    {
+        const DWORD nResult = FormatMessageW(FORMAT_MESSAGE_FROM_HMODULE | FORMAT_MESSAGE_IGNORE_INSERTS,
+            GetModuleHandleW(L"winhttp.dll"),
+            nStatusCode, 0, (LPWSTR)szMessageBuffer,
+            sizeof(szMessageBuffer) / sizeof(szMessageBuffer[0]), nullptr);
+
+        if (nResult > 0)
+        {
+            szMessageBuffer[nResult] = '\0';
+            pMessage = szMessageBuffer;
+        }
+    }
+    else
+    {
+        switch (nStatusCode)
+        {
+            case HTTP_STATUS_NO_CONTENT: pMessage = L"No Content"; break;
+            case HTTP_STATUS_MOVED: pMessage = L"Moved Permanently"; break;
+            case HTTP_STATUS_REDIRECT: pMessage = L"Moved Temporarily"; break;
+            case HTTP_STATUS_BAD_REQUEST: pMessage = L"Bad Request"; break;
+            case HTTP_STATUS_DENIED: pMessage = L"Unauthorized"; break;
+            case HTTP_STATUS_FORBIDDEN: pMessage = L"Forbidden"; break;
+            case HTTP_STATUS_NOT_FOUND: pMessage = L"Not Found"; break;
+            case HTTP_STATUS_REQUEST_TIMEOUT: pMessage = L"Request Time-out"; break;
+            case HTTP_STATUS_REQUEST_TOO_LARGE: pMessage = L"Request Entity Too Large"; break;
+            case HTTP_STATUS_URI_TOO_LONG: pMessage = L"Request-URI Too Large"; break;
+            case HTTP_STATUS_SERVER_ERROR: pMessage = L"Internal Server Error"; break;
+            case HTTP_STATUS_NOT_SUPPORTED: pMessage = L"Not Implemented"; break;
+            case HTTP_STATUS_BAD_GATEWAY: pMessage = L"Bad Gateway"; break;
+            case HTTP_STATUS_SERVICE_UNAVAIL: pMessage = L"Service Unavailable"; break;
+            case 429: pMessage = L"Too Many Requests"; break;
+        }
+    }
+
+    if (pMessage)
+    {
+        sMessage = szMessageBuffer;
+
+        // trim trailing whitespace (usually a newline)
+        while (isspace(sMessage.back()))
+          sMessage.pop_back();
+
+        sMessage.append(L" (status code ");
+        sMessage.append(std::to_wstring(nStatusCode));
+        sMessage.append(L")");
+    }
+    else
+    {
+        sMessage = L"status code " + std::to_wstring(nStatusCode);
+    }
+
+    return sMessage;
 }
 
 static const char* CCONV _RA_InstallIntegration()
@@ -800,26 +908,24 @@ static const char* CCONV _RA_InstallIntegration()
     g_hRADLL = LoadLibraryW(sIntegrationPath.c_str());
     if (g_hRADLL == nullptr)
     {
-        char buffer[1024];
-        if (::GetLastError() == ERROR_BAD_EXE_FORMAT)
+        std::wstring sError;
+        const wchar_t* sHeader = L"Could not load " RA_INT_DLL;
+
+        DWORD nError = ::GetLastError();
+        if (nError == ERROR_BAD_EXE_FORMAT)
         {
 #ifdef RA_X64
-          sprintf_s(buffer, sizeof(buffer), "Could not load RA_Integration-x64.dll (error %d)\nAre you trying to load the 32-bit version?\n", ::GetLastError());
+            sError = L"Are you trying to load the 32-bit version?";
 #else
-          sprintf_s(buffer, sizeof(buffer), "Could not load RA_Integration.dll (error %d)\nAre you trying to load the 64-bit version?\n", ::GetLastError());
+            sError = L"Are you trying to load the 64-bit version?";
 #endif
         }
         else
         {
-#ifdef RA_X64
-            sprintf_s(buffer, sizeof(buffer), "Could not load RA_Integration-x64.dll (error %d)\n%s\n", ::GetLastError(), GetLastErrorAsString().c_str());
-#else
-            sprintf_s(buffer, sizeof(buffer), "Could not load RA_Integration.dll (error %d)\n%s\n", ::GetLastError(), GetLastErrorAsString().c_str());
-#endif
+            sError = GetLastErrorString(nError);
         }
 
-        MessageBoxA(nullptr, buffer, "Warning", MB_OK | MB_ICONWARNING);
-
+        ShowErrorMessage(nullptr, sHeader, sError);
         return "0.0";
     }
 
@@ -989,20 +1095,20 @@ static void RA_InitCommon(HWND hMainHWND, int nEmulatorID, const char* sClientNa
 
     if (DoBlockingHttpCallWithRetry(sHostUrl, "dorequest.php", "r=latestintegration", buffer, sizeof(buffer), &nBytesRead, &nStatusCode) == FALSE)
     {
+        const std::wstring sHeader = L"Cannot access " + std::wstring(sHostUrl, sHostUrl + strlen(sHostUrl));
+        std::wstring sErrorMessage = GetStatusCodeText(nStatusCode);
         if (_RA_InitOffline != nullptr)
-        {
-            sprintf_s(buffer, sizeof(buffer), "Cannot access %s (status code %u)\nWorking offline.", sHostUrl, nStatusCode);
-            MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
-
-            _RA_InitOffline(hMainHWND, nEmulatorID, sClientVersion);
-        }
+            sErrorMessage += L"\n\nWorking offline.";
         else
-        {
-            sprintf_s(buffer, sizeof(buffer), "Cannot access %s (status code %u)\nPlease try again later.", sHostUrl, nStatusCode);
-            MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
+            sErrorMessage += L"\n\nPlease try again later.";
 
+        ShowErrorMessage(hMainHWND, sHeader, sErrorMessage);
+
+        if (_RA_InitOffline != nullptr)
+            _RA_InitOffline(hMainHWND, nEmulatorID, sClientVersion);
+        else
             RA_Shutdown();
-        }
+
         return;
     }
 
@@ -1036,12 +1142,16 @@ static void RA_InitCommon(HWND hMainHWND, int nEmulatorID, const char* sClientNa
     {
         /* NOTE: repurposing sLatestVersionUrl for the error message */
         GetJsonField(buffer, "Error", sLatestVersionUrl, sizeof(sLatestVersionUrl));
-        if (sLatestVersionUrl[0])
-            sprintf_s(buffer, sizeof(buffer), "Failed to fetch latest integration version.\n\n%s", sLatestVersionUrl);
-        else
-            sprintf_s(buffer, sizeof(buffer), "The latest integration check did not return a valid response.");
 
-        MessageBoxA(hMainHWND, buffer, "Error", MB_OK | MB_ICONERROR);
+        wchar_t message[256];
+        if (sLatestVersionUrl[0])
+            swprintf_s(message, sizeof(message) / sizeof(message[0]), L"%hs", sLatestVersionUrl);
+        else
+            swprintf_s(message, sizeof(message) / sizeof(message[0]),
+                L"The latest integration check did not return a valid response.");
+
+        ShowErrorMessage(hMainHWND, L"Failed to fetch latest integration version information", message);
+
         RA_Shutdown();
         return;
     }
@@ -1054,25 +1164,27 @@ static void RA_InitCommon(HWND hMainHWND, int nEmulatorID, const char* sClientNa
 
         if (nVerInstalled == 0)
         {
-            sprintf_s(buffer, sizeof(buffer), "Install RetroAchievements toolset?\n\n"
-                "In order to earn achievements you must download the toolset library.");
+            nMBReply = ShowYesNoWarningMessage(hMainHWND, L"Install RetroAchievements toolset?",
+                L"In order to earn achievements you must download the toolset library.");
         }
         else
         {
-            sprintf_s(buffer, sizeof(buffer), "Upgrade RetroAchievements toolset?\n\n"
-                "A required upgrade to the toolset is available. If you don't upgrade, you won't be able to earn achievements.\n\n"
-                "Latest Version: %s\nInstalled Version: %s", sVersionBuffer, sVerInstalled);
-        }
+            wchar_t message[256];
+            swprintf_s(message, sizeof(message) / sizeof(message[0]),
+                L"A required upgrade to the toolset is available. If you don't upgrade, you won't be able to earn achievements.\n\n"
+                L"Latest Version: %hs\nInstalled Version: %hs", sVersionBuffer, sVerInstalled);
 
-        nMBReply = MessageBoxA(hMainHWND, buffer, "Warning", MB_YESNO | MB_ICONWARNING);
+            nMBReply = ShowYesNoWarningMessage(hMainHWND, L"Upgrade RetroAchievements toolset?", message);
+        }
     }
     else if (nVerInstalled < nLatestDLLVer)
     {
-        sprintf_s(buffer, sizeof(buffer), "Upgrade RetroAchievements toolset?\n\n"
-            "An optional upgrade to the toolset is available.\n\n"
-            "Latest Version: %s\nInstalled Version: %s", sVersionBuffer, sVerInstalled);
+        wchar_t message[256];
+        swprintf_s(message, sizeof(message) / sizeof(message[0]),
+            L"An optional upgrade to the toolset is available.\n\n"
+            L"Latest Version: %hs\nInstalled Version: %hs", sVersionBuffer, sVerInstalled);
 
-        nMBReply = MessageBoxA(hMainHWND, buffer, "Warning", MB_YESNO | MB_ICONWARNING);
+        nMBReply = ShowYesNoWarningMessage(hMainHWND, L"Upgrade RetroAchievements toolset?", message);
 
         if (nMBReply == IDYES)
             RA_Shutdown(); // Unhook the DLL so we can replace it.
@@ -1089,8 +1201,7 @@ static void RA_InitCommon(HWND hMainHWND, int nEmulatorID, const char* sClientNa
 
             if (nVerInstalled < nLatestDLLVer)
             {
-                sprintf_s(buffer, sizeof(buffer), "Failed to update toolset (status code %u).", nStatusCode);
-                MessageBoxA(hMainHWND, buffer, "Error", MB_OK | MB_ICONERROR);
+                ShowErrorMessage(hMainHWND, L"Failed to update toolset", GetStatusCodeText(nStatusCode));
             }
         }
     }
@@ -1099,8 +1210,10 @@ static void RA_InitCommon(HWND hMainHWND, int nEmulatorID, const char* sClientNa
     {
         RA_Shutdown();
 
-        sprintf_s(buffer, sizeof(buffer), "%s toolset is required to earn achievements.", nVerInstalled == 0 ? "The" : "A newer");
-        MessageBoxA(hMainHWND, buffer, "Warning", MB_OK | MB_ICONWARNING);
+        wchar_t message[128];
+        swprintf_s(message, sizeof(message) / sizeof(message)[0],
+            L"%s toolset is required to earn achievements.", nVerInstalled == 0 ? L"The" : L"A newer");
+        ShowWarningMessage(hMainHWND, L"RetroAchievements disabled", message);
     }
     else if (sClientName == nullptr)
     {
